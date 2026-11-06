@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <title>Caça Cliques</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&amp;family=Nunito:wght@400;700;800;900&amp;display=swap" rel="stylesheet">
+  <style>
+  html, body { height: 100%; width: 100%; margin: 0; overflow: hidden; font-family: 'Nunito', sans-serif; }
+  .font-display { font-family: 'Bungee', cursive; }
+  
+  #game-area {
+    background: 
+      radial-gradient(ellipse at bottom, #7ec850 0%, #4a9c3a 40%, transparent 70%),
+      linear-gradient(to bottom, #87ceeb 0%, #b8e5f5 50%, #7ec850 70%, #4a9c3a 100%);
+    cursor: none;
+  }
+  
+  .cloud {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.8;
+    filter: blur(2px);
+  }
+  
+  .tree {
+    position: absolute;
+    bottom: 0;
+    font-size: 80px;
+    opacity: 0.7;
+  }
+  
+  .animal {
+    position: absolute;
+    font-size: 60px;
+    transition: transform 0.1s;
+    filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.3));
+    will-change: transform, left;
+    user-select: none;
+    pointer-events: none;
+  }
+  
+  .animal.golden {
+    filter: drop-shadow(0 0 12px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3));
+    animation: goldPulse 0.5s infinite alternate;
+  }
+  
+  @keyframes goldPulse {
+    from { filter: drop-shadow(0 0 8px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3)); }
+    to { filter: drop-shadow(0 0 20px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3)); }
+  }
+  
+  .animal.captured {
+    animation: captured 0.6s forwards;
+  }
+  
+  @keyframes captured {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5) rotate(20deg); opacity: 1; }
+    100% { transform: scale(0) rotate(360deg); opacity: 0; }
+  }
+  
+  /* Camera viewfinder */
+  #viewfinder {
+    position: absolute;
+    pointer-events: none;
+    width: 325px;
+    height: 325px;
+    transform: translate(-50%, -50%);
+    z-index: 50;
+    transition: width 0.2s, height 0.2s;
+  }
+  
+  #viewfinder.zoomed {
+    width: 1000px;
+    height: 1000px;
+  }
+  
+  .viewfinder-frame {
+    position: absolute;
+    inset: 0;
+    border: 3px solid rgba(255,255,255,0.9);
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  }
+  
+  .viewfinder-frame::before,
+  .viewfinder-frame::after {
+    content: '';
+    position: absolute;
+    background: #ff3b3b;
+  }
+  .viewfinder-frame::before {
+    left: 50%; top: 50%;
+    width: 30px; height: 2px;
+    transform: translate(-50%, -50%);
+  }
+  .viewfinder-frame::after {
+    left: 50%; top: 50%;
+    width: 2px; height: 30px;
+    transform: translate(-50%, -50%);
+  }
+  
+  .corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 4px solid #ff3b3b;
+  }
+  .corner.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+  .corner.tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
+  .corner.bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
+  .corner.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+  
+  .zoom-indicator {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  
+  /* Flash effect */
+  #flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+  
+  #flash.active {
+    animation: flash 0.3s;
+  }
+  
+  @keyframes flash {
+    0% { opacity: 0; }
+    20% { opacity: 0.2; }
+    100% { opacity: 0; }
+  }
+  
+  /* Score popup */
+  .score-popup {
+    position: absolute;
+    font-family: 'Bungee', cursive;
+    font-size: 32px;
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    pointer-events: none;
+    z-index: 60;
+    animation: scoreFloat 1s forwards;
+  }
+  
+  @keyframes scoreFloat {
+    0% { transform: translateY(0) scale(0.5); opacity: 0; }
+    20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+    100% { transform: translateY(-80px) scale(1); opacity: 0; }
+  }
+  
+  .miss-popup {
+    color: #ff4444;
+    font-size: 24px;
+  }
+  
+  /* Key indicator pulse */
+  .key-pulse {
+    animation: keyPulse 1.5s infinite;
+  }
+  
+  @keyframes keyPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 4px 0 #b8860b, 0 0 0 rgba(255,215,0,0); }
+    50% { transform: scale(1.05); box-shadow: 0 4px 0 #b8860b, 0 0 20px rgba(255,215,0,0.6); }
+  }
+  
+  .key-press {
+    animation: keyPress 0.15s;
+  }
+  
+  @keyframes keyPress {
+    0%, 100% { transform: translateY(0); box-shadow: 0 4px 0 #b8860b; }
+    50% { transform: translateY(4px); box-shadow: 0 0 0 #b8860b; }
+  }
+  
+  /* Screen shake */
+  @keyframes shake {
+    0%, 100% { transform: translate(0,0); }
+    25% { transform: translate(-3px, 2px); }
+    50% { transform: translate(3px, -2px); }
+    75% { transform: translate(-2px, -2px); }
+  }
+  
+  .shake { animation: shake 0.2s; }
+  
+  /* HUD */
+  .hud-card {
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+  }
+  
+  /* Modal */
+  .modal-bg {
+    background: linear-gradient(135deg, #4a9c3a 0%, #4a9c3a 50%, #4a9c3a 100%);
+  }
+  
+  .btn-primary {
+    background: linear-gradient(180deg, #ffd700 0%, #ffa500 100%);
+    box-shadow: 0 6px 0 #b8860b, 0 8px 20px rgba(0,0,0,0.3);
+    transition: all 0.1s;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #b8860b, 0 10px 24px rgba(0,0,0,0.4);
+  }
+  .btn-primary:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #b8860b, 0 4px 10px rgba(0,0,0,0.3);
+  }
+  
+  .timer-bar {
+    transition: width 1s linear;
+  }
+  
+  /* Ground grass */
+  .grass-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.2));
+    pointer-events: none;
+  }
+  
+  /* Combo system */
+  #combo-display {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    z-index: 70;
+    pointer-events: none;
+    text-align: center;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #combo-display.show {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .combo-text {
+    font-family: 'Bungee', cursive;
+    font-size: 56px;
+    color: #fff;
+    text-shadow: 3px 3px 0 #ff6b00, -2px -2px 0 #ff6b00, 2px -2px 0 #ff6b00, -2px 2px 0 #ff6b00;
+    line-height: 1;
+  }
+  .combo-sub {
+    font-family: 'Bungee', cursive;
+    font-size: 22px;
+    color: #ffd700;
+    text-shadow: 2px 2px 0 #000;
+    margin-top: 4px;
+  }
+
+  .combo-popup {
+    position: absolute;
+    font-family: 'Bungee', cursive;
+    font-size: 42px;
+    color: #ff6b00;
+    text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    pointer-events: none;
+    z-index: 65;
+    animation: comboFloat 1.2s forwards;
+  }
+
+  @keyframes comboFloat {
+    0% { transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); opacity: 0; }
+    20% { transform: translate(-50%, -80%) scale(1.4) rotate(5deg); opacity: 1; }
+    60% { transform: translate(-50%, -120%) scale(1.1) rotate(-2deg); opacity: 1; }
+    100% { transform: translate(-50%, -180%) scale(0.8) rotate(0deg); opacity: 0; }
+  }
+
+  /* HUD combo badge */
+  #combo-badge {
+    transition: all 0.3s;
+  }
+  #combo-badge.active {
+    animation: comboBadgePulse 0.4s;
+  }
+  @keyframes comboBadgePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+
+  /* Photo feedback */
+  .photo-capture {
+    position: absolute;
+    border: 4px solid white;
+    background: rgba(255,255,255,0.1);
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 55;
+    animation: photoShrink 0.8s forwards;
+  }
+  
+  @keyframes photoShrink {
+    0% { opacity: 1; transform: scale(1); }
+    60% { opacity: 1; transform: scale(0.8); }
+    100% { opacity: 0; transform: scale(0.3) translate(300px, -300px) rotate(15deg); }
+  }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full w-full">
+  <main id="app" class="relative h-full w-full overflow-hidden"><!-- GAME AREA -->
+   <div id="game-area" class="absolute inset-0"><!-- Decorative clouds and trees added via JS -->
+    <div class="grass-line"></div><!-- Flash overlay -->
+    <div id="flash"></div><!-- Viewfinder -->
+    <div id="viewfinder" class="hidden">
+     <div class="viewfinder-frame">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="zoom-indicator" id="zoom-text">
+       ZOOM 1x
+      </div>
+     </div>
+    </div>
+   </div><!-- HUD -->
+   <header id="hud" class="absolute top-4 left-4 right-4 flex justify-between items-start gap-3 z-40 hidden pointer-events-none">
+    <div class="hud-card px-5 py-3 text-white">
+     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">
+      Pontos
+     </div>
+     <div id="score" class="font-display text-3xl text-yellow-300">
+      0
+     </div>
+    </div>
+    <div class="hud-card px-5 py-3 text-white flex-1 max-w-md">
+     <div class="flex justify-between items-center mb-2"><span class="text-xs opacity-70 font-bold uppercase tracking-wider">Tempo</span> <span id="time-text" class="font-display text-xl">90s</span>
+     </div>
+     <div class="w-full h-3 bg-black/40 rounded-full overflow-hidden">
+      <div id="time-bar" class="timer-bar h-full bg-gradient-to-r from-green-400 to-yellow-400 rounded-full" style="width: 100%"></div>
+     </div>
+    </div>
+    <div class="hud-card px-5 py-3 text-white text-right">
+     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">
+      Fotos
+     </div>
+     <div id="photos" class="font-display text-3xl">
+      0
+     </div>
+    </div>
+    <div id="combo-badge" class="hud-card px-5 py-3 text-white text-center hidden">
+     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">Combo</div>
+     <div id="combo-count" class="font-display text-3xl text-orange-400">x1</div>
+    </div>
+   </header><!-- Bottom tip bar (during game) -->
+   <div id="tip-bar" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 hidden pointer-events-none">
+    <div class="hud-card px-6 py-3 text-white flex items-center gap-4">
+     <div class="flex items-center gap-2"><kbd class="key-pulse inline-flex items-center justify-center px-3 py-1.5 bg-yellow-400 text-gray-900 font-bold rounded-md text-sm border-b-4 border-yellow-600" id="print-key">PrintScr</kbd> <span class="text-sm font-bold">Fotografar</span>
+     </div>
+     <div class="w-px h-6 bg-white/30"></div>
+     <div class="flex items-center gap-2"><kbd class="inline-flex items-center justify-center px-3 py-1.5 bg-white/90 text-gray-900 font-bold rounded-md text-sm border-b-4 border-gray-400">Z</kbd> <span class="text-sm font-bold">Zoom</span>
+     </div>
+    </div>
+   </div><!-- START MODAL -->
+   <div id="start-modal" class="absolute inset-0 z-50 flex items-center justify-center p-6">
+    <div class="modal-bg absolute inset-0"></div>
+    <div class="relative max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
+     <div class="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 p-8 text-center relative">
+      <div class="text-7xl mb-2">
+       📸🦆
+      </div>
+      <h1 id="title" class="font-display text-4xl md:text-5xl text-white drop-shadow-lg">Caça Cliques</h1>
+      <p id="subtitle" class="text-white/90 font-bold mt-2">Aprenda o atalho PrintScreen</p>
+     </div>
+     <div class="p-8 space-y-5">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+       <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+        <div class="text-3xl mb-1">
+         🎯
+        </div>
+        <div class="font-bold text-blue-900 text-sm">
+         Mire
+        </div>
+        <div class="text-xs text-blue-700">
+         Mova o mouse
+        </div>
+       </div>
+       <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4 text-center">
+        <div class="text-3xl mb-1">
+         🔍
+        </div>
+        <div class="font-bold text-purple-900 text-sm">
+         Dê Zoom
+        </div>
+        <div class="text-xs text-purple-700">
+         Segure <kbd class="bg-white px-1.5 rounded border">Z</kbd>
+        </div>
+       </div>
+       <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-center">
+        <div class="text-3xl mb-1">
+         📷
+        </div>
+        <div class="font-bold text-yellow-900 text-sm">
+         Fotografe
+        </div>
+        <div class="text-xs text-yellow-700">
+         Pressione <kbd class="bg-white px-1.5 rounded border">PrintScr</kbd>
+        </div>
+       </div>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+       <div class="flex items-center justify-around text-center">
+        <div>
+         <div class="text-4xl">
+          🦊
+         </div>
+         <div class="font-bold text-gray-800 text-sm mt-1">
+          Animal Normal
+         </div>
+         <div class="text-green-600 font-display text-lg">
+          +5 pts
+         </div>
+        </div>
+        <div class="w-px h-16 bg-gray-300"></div>
+        <div>
+         <div class="text-4xl" style="filter: drop-shadow(0 0 8px gold);">
+          🦌
+         </div>
+         <div class="font-bold text-gray-800 text-sm mt-1">
+          Dourado (rápido)
+         </div>
+         <div class="text-yellow-600 font-display text-lg">
+          +10 pts
+         </div>
+        </div>
+        <div class="w-px h-16 bg-gray-300"></div>
+        <div>
+         <div class="text-3xl mb-1">📸✖️2</div>
+         <div class="font-bold text-gray-800 text-sm mt-1">Combo (2+ animais)</div>
+         <div class="text-orange-600 font-display text-lg">pts × combo!</div>
+        </div>
+       </div>
+      </div>
+      <p id="instructions" class="text-center text-gray-600 text-sm">Você tem <b>1 minuto</b> para fotografar o máximo possível! Pressione <kbd class="bg-gray-100 px-8 py-0.5 rounded border font-mono">PrintScr</kbd> antes que o animal saia da tela.</p><button id="start-btn" class="btn-primary w-full py-4 rounded-2xl font-display text-2xl text-gray-900"> <span id="start-btn-text">COMEÇAR</span> </button>
+      <p class="text-xs text-center text-gray-700">💡 Dica: a tecla <b>PrintScr</b> fica geralmente no canto superior direito do teclado</p>
+     </div>
+    </div>
+   </div><!-- END MODAL -->
+   <div id="end-modal" class="absolute inset-0 z-50 flex items-center justify-center p-6 hidden">
+    <div class="modal-bg absolute inset-0"></div>
+    <div class="relative max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
+     <div class="bg-gradient-to-r from-green-400 via-teal-500 to-blue-500 p-8 text-center">
+      <div class="text-6xl mb-2">
+       🏆
+      </div>
+      <h2 class="font-display text-4xl text-white drop-shadow-lg">Tempo Esgotado!</h2>
+     </div>
+     <div class="p-8 space-y-4">
+      <div class="text-center">
+       <div class="text-sm text-gray-500 font-bold uppercase tracking-wider">
+        Sua Pontuação
+       </div>
+       <div id="final-score" class="font-display text-6xl text-orange-500">
+        0
+       </div>
+       <div id="rank-text" class="font-bold text-lg text-gray-700 mt-1">
+        Fotógrafo Iniciante
+       </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+       <div class="bg-blue-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-blue-700 font-bold uppercase">
+         Fotos
+        </div>
+        <div id="final-photos" class="font-display text-2xl text-blue-900">
+         0
+        </div>
+       </div>
+       <div class="bg-yellow-50 rounded-xl p-3 text-center">
+        <div class="text-xs text-yellow-700 font-bold uppercase">
+         Dourados
+        </div>
+        <div id="final-golden" class="font-display text-2xl text-yellow-900">
+         0
+        </div>
+       </div>
+      </div><button id="restart-btn" class="btn-primary w-full py-4 rounded-2xl font-display text-xl text-gray-900"> JOGAR NOVAMENTE </button>
+	   <div class="mt-6 pt-6 border-t border-gray-200">
+       <p class="text-xs text-gray-600 text-center"><strong>💡 Dica:</strong> Salve seu resultado! Pressione <kbd class="bg-gray-100 px-2 py-0.5 rounded border font-mono font-bold">Win + PrintScr</kbd> para capturar a tela. O print será salvo em <span class="font-mono text-gray-700">Imagens → Capturas de Tela</span></p>
+      </div>
+     </div>
+    </div>
+   </div>
+  </main>
+  <script>
+  const defaultConfig = {
+    game_title: "Caça Cliques",
+    game_subtitle: "Aprenda o atalho PrintScreen",
+    instruction_text: "Você tem 1 minuto para fotografar o máximo possível! Pressione PrintScr antes que o animal saia da tela.",
+    start_button_text: "COMEÇAR"
+  };
+
+  const ANIMALS = ['🦊','🐰','🦌','🐿️','🦔','🐗','🦝','🐻','🦡','🐺','😺','🦒', '🦁','🐯','🐶','🐮','🐷','🐭','🐹','🐲','🦄','🦓','🐴','🐸','🐼','🐨','🐢','🐌','🦉','🦩','🦚','🐧','🐞','🐝','🐜','🦜','🦢','🦔'];
+  const GAME_DURATION = 120;
+
+  const gameArea = document.getElementById('game-area');
+  const viewfinder = document.getElementById('viewfinder');
+  const zoomText = document.getElementById('zoom-text');
+  const flash = document.getElementById('flash');
+  const scoreEl = document.getElementById('score');
+  const photosEl = document.getElementById('photos');
+  const timeText = document.getElementById('time-text');
+  const timeBar = document.getElementById('time-bar');
+  const hud = document.getElementById('hud');
+  const tipBar = document.getElementById('tip-bar');
+  const startModal = document.getElementById('start-modal');
+  const endModal = document.getElementById('end-modal');
+  const startBtn = document.getElementById('start-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  const printKey = document.getElementById('print-key');
+  const comboBadge = document.getElementById('combo-badge');
+  const comboCount = document.getElementById('combo-count');
+
+  // Button sounds
+  startBtn.addEventListener('mousedown', playBtnClick);
+  restartBtn.addEventListener('mousedown', playBtnClick);
+
+  // ── SOUND SYSTEM ──────────────────────────────────────────────────────────
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    return audioCtx;
+  }
+
+  function playShutter() {
+    try {
+      const ctx = getAudioCtx();
+      // Mechanical click
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.12, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) {
+        const t = i / ctx.sampleRate;
+        d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 80) * 0.6
+               + Math.sin(2 * Math.PI * 180 * t) * Math.exp(-t * 60) * 0.3;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.7, ctx.currentTime);
+      src.connect(g); g.connect(ctx.destination);
+      src.start();
+
+      // High-pitch flash "zing"
+      const osc = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc.frequency.setValueAtTime(1800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
+      g2.gain.setValueAtTime(0.25, ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(g2); g2.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.08);
+    } catch(e) {}
+  }
+
+  function playCaptureBlip(golden) {
+    try {
+      const ctx = getAudioCtx();
+      const freqs = golden ? [880, 1100, 1320] : [523, 659, 784];
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = golden ? 'sine' : 'square';
+        osc.frequency.value = f;
+        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.06);
+        g.gain.linearRampToValueAtTime(golden ? 0.18 : 0.1, ctx.currentTime + i * 0.06 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.06 + 0.12);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.06);
+        osc.stop(ctx.currentTime + i * 0.06 + 0.12);
+      });
+    } catch(e) {}
+  }
+
+  function playMiss() {
+    try {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.15);
+      g.gain.setValueAtTime(0.2, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+
+  function playCombo(count) {
+    try {
+      const ctx = getAudioCtx();
+      // Ascending fanfare based on combo count
+      const baseFreq = 523 * Math.pow(1.12, count - 2);
+      [0, 0.07, 0.14].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = baseFreq * [1, 1.26, 1.5][i];
+        g.gain.setValueAtTime(0, ctx.currentTime + delay);
+        g.gain.linearRampToValueAtTime(0.22, ctx.currentTime + delay + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.2);
+      });
+    } catch(e) {}
+  }
+
+  function playBtnClick() {
+    try {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.06);
+      g.gain.setValueAtTime(0.18, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.1);
+    } catch(e) {}
+  }
+
+  function playGameOver() {
+    try {
+      const ctx = getAudioCtx();
+      const melody = [523, 415, 330, 262];
+      melody.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
+        g.gain.linearRampToValueAtTime(0.25, ctx.currentTime + i * 0.18 + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.22);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.18);
+        osc.stop(ctx.currentTime + i * 0.18 + 0.25);
+      });
+    } catch(e) {}
+  }
+
+  function playCountdownBeep(urgent) {
+    try {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = urgent ? 880 : 660;
+      g.gain.setValueAtTime(0.15, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.12);
+    } catch(e) {}
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  let state = {
+    running: false,
+    score: 0,
+    photos: 0,
+    golden: 0,
+    time: GAME_DURATION,
+    zoomed: false,
+    mouseX: 0,
+    mouseY: 0,
+    animals: [],
+    lastSpawn: 0,
+    spawnInterval: 1400,
+    animalId: 0
+  };
+
+  let timerInterval = null;
+  let animationFrame = null;
+
+  // Decorative background
+  function createScenery() {
+    // Remove old scenery
+    gameArea.querySelectorAll('.cloud, .tree').forEach(n => n.remove());
+    
+    const rect = gameArea.getBoundingClientRect();
+    // Clouds
+    for (let i = 0; i < 5; i++) {
+      const cloud = document.createElement('div');
+      cloud.className = 'cloud';
+      const size = 60 + Math.random() * 80;
+      cloud.style.width = size + 'px';
+      cloud.style.height = (size * 0.6) + 'px';
+      cloud.style.left = Math.random() * rect.width + 'px';
+      cloud.style.top = (20 + Math.random() * (rect.height * 0.35)) + 'px';
+      gameArea.appendChild(cloud);
+    }
+    // Trees
+    const treeEmojis = ['🌲','🌳','🌴','🌲','🌳'];
+    for (let i = 0; i < 7; i++) {
+      const tree = document.createElement('div');
+      tree.className = 'tree';
+      tree.textContent = treeEmojis[Math.floor(Math.random() * treeEmojis.length)];
+      tree.style.left = (Math.random() * rect.width) + 'px';
+      tree.style.fontSize = (50 + Math.random() * 50) + 'px';
+      tree.style.bottom = (-10 + Math.random() * 20) + 'px';
+      gameArea.appendChild(tree);
+    }
+  }
+
+  // Mouse tracking
+  document.addEventListener('mousemove', (e) => {
+    state.mouseX = e.clientX;
+    state.mouseY = e.clientY;
+    if (state.running) {
+      viewfinder.style.left = e.clientX + 'px';
+      viewfinder.style.top = e.clientY + 'px';
+    }
+  });
+
+  // Keyboard handling
+  document.addEventListener('keydown', (e) => {
+    if (!state.running) return;
+
+    // Zoom with Z
+    if (e.key === 'z' || e.key === 'Z') {
+      if (!state.zoomed) {
+        state.zoomed = true;
+        viewfinder.classList.add('zoomed');
+        zoomText.textContent = 'ZOOM 2x';
+      }
+    }
+
+    // PrintScreen - try multiple detection methods
+    const isPrint = e.key === 'PrintScreen' || e.code === 'PrintScreen' || 
+                    e.key === 'Print' || e.keyCode === 44;
+    
+    if (isPrint) {
+      e.preventDefault();
+      takePhoto();
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'z' || e.key === 'Z') {
+      state.zoomed = false;
+      viewfinder.classList.remove('zoomed');
+      zoomText.textContent = 'ZOOM 1x';
+    }
+    // PrintScreen often only fires on keyup in some browsers
+    const isPrint = e.key === 'PrintScreen' || e.code === 'PrintScreen' || 
+                    e.key === 'Print' || e.keyCode === 44;
+    if (isPrint && state.running) {
+      e.preventDefault();
+      takePhoto();
+    }
+  });
+
+  // Photo taking
+  let photoCooldown = false;
+  function takePhoto() {
+    if (photoCooldown) return;
+    photoCooldown = true;
+    setTimeout(() => photoCooldown = false, 250);
+
+    // Shutter sound
+    playShutter();
+
+    // Flash effect
+    flash.classList.remove('active');
+    void flash.offsetWidth;
+    flash.classList.add('active');
+
+    // Key press animation
+    printKey.classList.remove('key-press');
+    void printKey.offsetWidth;
+    printKey.classList.add('key-press');
+
+    // Photo capture rect
+    const vfRect = viewfinder.getBoundingClientRect();
+    const photoRect = document.createElement('div');
+    photoRect.className = 'photo-capture';
+    photoRect.style.left = vfRect.left + 'px';
+    photoRect.style.top = vfRect.top + 'px';
+    photoRect.style.width = vfRect.width + 'px';
+    photoRect.style.height = vfRect.height + 'px';
+    gameArea.appendChild(photoRect);
+    setTimeout(() => photoRect.remove(), 800);
+
+    // Check captures
+    const centerX = state.mouseX;
+    const centerY = state.mouseY;
+    const radius = state.zoomed ? 80 : 130;
+    
+    let caught = 0;
+    let gainedPoints = 0;
+    let caughtAnimals = [];
+    
+    state.animals.forEach(animal => {
+      if (animal.captured) return;
+      const animalRect = animal.el.getBoundingClientRect();
+      const ax = animalRect.left + animalRect.width / 2;
+      const ay = animalRect.top + animalRect.height / 2;
+      const dist = Math.hypot(ax - centerX, ay - centerY);
+      
+      if (dist < radius) {
+        animal.captured = true;
+        const pts = animal.golden ? 10 : 5;
+        gainedPoints += pts;
+        caught++;
+        if (animal.golden) state.golden++;
+        caughtAnimals.push({ animal, ax, ay, pts });
+        
+        animal.el.classList.add('captured');
+        setTimeout(() => {
+          animal.el.remove();
+          state.animals = state.animals.filter(a => a !== animal);
+        }, 600);
+      }
+    });
+
+    if (caught > 0) {
+      // ── COMBO SYSTEM ──────────────────────────────────────────
+      const multiplier = caught; // 1 animal = x1, 2 = x2, etc.
+      const finalPoints = gainedPoints * multiplier;
+
+      caughtAnimals.forEach(({ ax, ay, pts, animal }) => {
+        playCaptureBlip(animal.golden);
+        showScorePopup(ax, ay, '+' + pts, animal.golden);
+      });
+
+      if (multiplier >= 2) {
+        // Combo bonus
+        playCombo(multiplier);
+        const comboLabels = ['', '', 'DUPLO!', 'TRIPLO!', 'QUADRUPLO!', 'ABSURDO!'];
+        const label = comboLabels[Math.min(multiplier, comboLabels.length - 1)] || multiplier + 'x COMBO!';
+        showComboPopup(centerX, centerY, label, multiplier, finalPoints - gainedPoints);
+        updateComboBadge(multiplier);
+      } else {
+        hideComboBadge();
+      }
+
+      state.score += finalPoints;
+      state.photos += caught;
+      updateHUD();
+      // ──────────────────────────────────────────────────────────
+    } else {
+      // Miss feedback
+      playMiss();
+      showScorePopup(centerX, centerY, 'Vazio!', false, true);
+      gameArea.classList.add('shake');
+      setTimeout(() => gameArea.classList.remove('shake'), 200);
+      hideComboBadge();
+    }
+  }
+
+  function showComboPopup(x, y, label, multiplier, bonusPoints) {
+    const p = document.createElement('div');
+    p.className = 'combo-popup';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    const colors = ['', '', '#ff9500', '#ff3b30', '#af52de', '#ff2d55'];
+    p.style.color = colors[Math.min(multiplier, colors.length - 1)] || '#ff2d55';
+    p.innerHTML = label + (bonusPoints > 0 ? `<br><span style="font-size:22px;color:#ffd700;">+${bonusPoints} bônus!</span>` : '');
+    gameArea.appendChild(p);
+    setTimeout(() => p.remove(), 1200);
+  }
+
+  function updateComboBadge(multiplier) {
+    comboBadge.classList.remove('hidden');
+    comboCount.textContent = 'x' + multiplier;
+    comboBadge.classList.remove('active');
+    void comboBadge.offsetWidth;
+    comboBadge.classList.add('active');
+    const colors = ['', '', 'text-orange-400', 'text-red-400', 'text-purple-400', 'text-pink-400'];
+    comboCount.className = 'font-display text-3xl ' + (colors[Math.min(multiplier, colors.length-1)] || 'text-pink-400');
+  }
+
+  function hideComboBadge() {
+    comboBadge.classList.add('hidden');
+  }
+
+  function showScorePopup(x, y, text, golden, miss) {
+    const p = document.createElement('div');
+    p.className = 'score-popup' + (miss ? ' miss-popup' : '');
+    p.textContent = text;
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.transform = 'translate(-50%, -50%)';
+    if (golden) p.style.color = '#ffd700';
+    else if (!miss) p.style.color = '#7fff7f';
+    gameArea.appendChild(p);
+    setTimeout(() => p.remove(), 1000);
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = state.score;
+    photosEl.textContent = state.photos;
+  }
+
+  // Animal spawning
+  function spawnAnimal() {
+    const rect = gameArea.getBoundingClientRect();
+    const golden = Math.random() < 0.25;
+    const fromLeft = Math.random() < 0.5;
+    const emoji = golden ? (Math.random() < 0.5 ? '🦌' : '🐿️') : ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+    
+    const el = document.createElement('div');
+    el.className = 'animal' + (golden ? ' golden' : '');
+    el.textContent = emoji;
+    
+    // Y position: varied heights
+    const y = rect.height * 0.35 + Math.random() * rect.height * 0.45;
+    const startX = fromLeft ? -80 : rect.width + 80;
+    
+    el.style.left = startX + 'px';
+    el.style.top = y + 'px';
+    
+    if (!fromLeft) el.style.transform = 'scaleX(-1)';
+    
+    gameArea.appendChild(el);
+    
+    const baseSpeed = golden ? 380 : 200;
+    const speed = baseSpeed + Math.random() * 80;
+    
+    const animal = {
+      id: ++state.animalId,
+      el,
+      x: startX,
+      y,
+      vx: fromLeft ? speed : -speed,
+      golden,
+      captured: false,
+      bobPhase: Math.random() * Math.PI * 2
+    };
+    state.animals.push(animal);
+  }
+
+  // Game loop
+  let lastTime = 0;
+  function gameLoop(ts) {
+    if (!state.running) return;
+    if (!lastTime) lastTime = ts;
+    const dt = Math.min((ts - lastTime) / 1000, 0.05);
+    lastTime = ts;
+
+    // Spawn
+    state.lastSpawn += dt * 1000;
+    if (state.lastSpawn >= state.spawnInterval) {
+      state.lastSpawn = 0;
+      spawnAnimal();
+      // Gradually speed up spawning
+      state.spawnInterval = Math.max(700, state.spawnInterval - 15);
+    }
+
+    // Update animals
+    const rect = gameArea.getBoundingClientRect();
+    state.animals.forEach(a => {
+      if (a.captured) return;
+      a.x += a.vx * dt;
+      a.bobPhase += dt * 4;
+      const bob = Math.sin(a.bobPhase) * 8;
+      a.el.style.left = a.x + 'px';
+      a.el.style.top = (a.y + bob) + 'px';
+    });
+
+    // Remove off-screen
+    state.animals = state.animals.filter(a => {
+      if (a.captured) return true;
+      if (a.x < -150 || a.x > rect.width + 150) {
+        a.el.remove();
+        return false;
+      }
+      return true;
+    });
+
+    animationFrame = requestAnimationFrame(gameLoop);
+  }
+
+  // Timer
+  function startTimer() {
+    timerInterval = setInterval(() => {
+      state.time--;
+      timeText.textContent = state.time;
+      const pct = (state.time / GAME_DURATION) * 100;
+      timeBar.style.width = pct + '%';
+      
+      if (state.time <= 10) {
+        timeBar.classList.remove('from-green-400','to-yellow-400');
+        timeBar.classList.add('from-orange-500','to-red-500');
+        playCountdownBeep(state.time <= 5);
+      }
+      
+      if (state.time <= 0) {
+        endGame();
+      }
+    }, 1000);
+  }
+
+  function startGame() {
+    state.running = true;
+    state.score = 0;
+    state.photos = 0;
+    state.golden = 0;
+    state.time = GAME_DURATION;
+    state.animals.forEach(a => a.el.remove());
+    state.animals = [];
+    state.lastSpawn = 0;
+    state.spawnInterval = 1400;
+    lastTime = 0;
+
+    hideComboBadge();
+
+    timeBar.style.width = '100%';
+    timeBar.classList.add('from-green-400','to-yellow-400');
+    timeBar.classList.remove('from-orange-500','to-red-500');
+    
+    updateHUD();
+    timeText.textContent = GAME_DURATION + 's';
+    
+    startModal.classList.add('hidden');
+    endModal.classList.add('hidden');
+    hud.classList.remove('hidden');
+    tipBar.classList.remove('hidden');
+    viewfinder.classList.remove('hidden');
+    
+    createScenery();
+    startTimer();
+    animationFrame = requestAnimationFrame(gameLoop);
+  }
+
+  function endGame() {
+    state.running = false;
+    clearInterval(timerInterval);
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    
+    playGameOver();
+    hideComboBadge();
+    
+    // Clear animals
+    state.animals.forEach(a => a.el.remove());
+    state.animals = [];
+    
+    // Update final stats
+    document.getElementById('final-score').textContent = state.score;
+    document.getElementById('final-photos').textContent = state.photos;
+    document.getElementById('final-golden').textContent = state.golden;
+    
+    // Rank
+    let rank = 'Fotógrafo Iniciante 📷';
+    if (state.score >= 30) rank = 'Fotógrafo Amador 🎞️';
+    if (state.score >= 70) rank = 'Fotógrafo Profissional 📸';
+    if (state.score >= 120) rank = 'Fotógrafo Mestre 🏆';
+    if (state.score >= 200) rank = 'Lenda da Fotografia! 👑';
+    document.getElementById('rank-text').textContent = rank;
+    
+    hud.classList.add('hidden');
+    tipBar.classList.add('hidden');
+    viewfinder.classList.add('hidden');
+    endModal.classList.remove('hidden');
+  }
+
+  startBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', startGame);
+
+  // Resize handling
+  window.addEventListener('resize', () => {
+    if (state.running) createScenery();
+  });
+
+  // Element SDK init
+  function updateTexts(config) {
+    document.getElementById('title').textContent = config.game_title || defaultConfig.game_title;
+    document.getElementById('subtitle').textContent = config.game_subtitle || defaultConfig.game_subtitle;
+    document.getElementById('instructions').innerHTML = 
+      (config.instruction_text || defaultConfig.instruction_text)
+        .replace('PrintScr', '<kbd class="bg-gray-100 px-2 py-0.5 rounded border font-mono">PrintScr</kbd>')
+        .replace('1 minuto', '<b>1 minuto</b>');
+    document.getElementById('start-btn-text').textContent = config.start_button_text || defaultConfig.start_button_text;
+  }
+
+  if (window.elementSdk) {
+    window.elementSdk.init({
+      defaultConfig,
+      onConfigChange: async (config) => {
+        updateTexts(config);
+      },
+      mapToCapabilities: () => ({
+        recolorables: [],
+        borderables: [],
+        fontEditable: undefined,
+        fontSizeable: undefined
+      }),
+      mapToEditPanelValues: (config) => new Map([
+        ['game_title', config.game_title || defaultConfig.game_title],
+        ['game_subtitle', config.game_subtitle || defaultConfig.game_subtitle],
+        ['instruction_text', config.instruction_text || defaultConfig.instruction_text],
+        ['start_button_text', config.start_button_text || defaultConfig.start_button_text]
+      ])
+    });
+  }
+
+  updateTexts(defaultConfig);
+  lucide.createIcons();
+  
+  // Initial scenery preview
+  requestAnimationFrame(() => createScenery());
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f529c6365fca4f5',t:'MTc3NzY3ODYxMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
