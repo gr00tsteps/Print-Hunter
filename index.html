@@ -1,1134 +1,529 @@
 <!doctype html>
-<html lang="pt-BR" class="h-full">
- <head>
-  <meta charset="UTF-8">
-  <title>Caça Cliques</title>
-  <script src="/_sdk/element_sdk.js"></script>
-  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Bungee&amp;family=Nunito:wght@400;700;800;900&amp;display=swap" rel="stylesheet">
-  <style>
-  html, body { height: 100%; width: 100%; margin: 0; overflow: hidden; font-family: 'Nunito', sans-serif; }
-  .font-display { font-family: 'Bungee', cursive; }
-  
-  #game-area {
-    background: 
-      radial-gradient(ellipse at bottom, #7ec850 0%, #4a9c3a 40%, transparent 70%),
-      linear-gradient(to bottom, #87ceeb 0%, #b8e5f5 50%, #7ec850 70%, #4a9c3a 100%);
-    cursor: none;
-  }
-  
-  .cloud {
-    position: absolute;
-    background: white;
-    border-radius: 50%;
-    opacity: 0.8;
-    filter: blur(2px);
-  }
-  
-  .tree {
-    position: absolute;
-    bottom: 0;
-    font-size: 80px;
-    opacity: 0.7;
-  }
-  
-  .animal {
-    position: absolute;
-    font-size: 60px;
-    transition: transform 0.1s;
-    filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.3));
-    will-change: transform, left;
-    user-select: none;
-    pointer-events: none;
-  }
-  
-  .animal.golden {
-    filter: drop-shadow(0 0 12px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3));
-    animation: goldPulse 0.5s infinite alternate;
-  }
-  
-  @keyframes goldPulse {
-    from { filter: drop-shadow(0 0 8px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3)); }
-    to { filter: drop-shadow(0 0 20px gold) drop-shadow(2px 4px 4px rgba(0,0,0,0.3)); }
-  }
-  
-  .animal.captured {
-    animation: captured 0.6s forwards;
-  }
-  
-  @keyframes captured {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5) rotate(20deg); opacity: 1; }
-    100% { transform: scale(0) rotate(360deg); opacity: 0; }
-  }
-  
-  /* Camera viewfinder */
-  #viewfinder {
-    position: absolute;
-    pointer-events: none;
-    width: 325px;
-    height: 325px;
-    transform: translate(-50%, -50%);
-    z-index: 50;
-    transition: width 0.2s, height 0.2s;
-  }
-  
-  #viewfinder.zoomed {
-    width: 1000px;
-    height: 1000px;
-  }
-  
-  .viewfinder-frame {
-    position: absolute;
-    inset: 0;
-    border: 3px solid rgba(255,255,255,0.9);
-    border-radius: 8px;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
-  }
-  
-  .viewfinder-frame::before,
-  .viewfinder-frame::after {
-    content: '';
-    position: absolute;
-    background: #ff3b3b;
-  }
-  .viewfinder-frame::before {
-    left: 50%; top: 50%;
-    width: 30px; height: 2px;
-    transform: translate(-50%, -50%);
-  }
-  .viewfinder-frame::after {
-    left: 50%; top: 50%;
-    width: 2px; height: 30px;
-    transform: translate(-50%, -50%);
-  }
-  
-  .corner {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 4px solid #ff3b3b;
-  }
-  .corner.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
-  .corner.tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
-  .corner.bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
-  .corner.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
-  
-  .zoom-indicator {
-    position: absolute;
-    top: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  
-  /* Flash effect */
-  #flash {
-    position: absolute;
-    inset: 0;
-    background: white;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 100;
-  }
-  
-  #flash.active {
-    animation: flash 0.3s;
-  }
-  
-  @keyframes flash {
-    0% { opacity: 0; }
-    20% { opacity: 0.2; }
-    100% { opacity: 0; }
-  }
-  
-  /* Score popup */
-  .score-popup {
-    position: absolute;
-    font-family: 'Bungee', cursive;
-    font-size: 32px;
-    font-weight: 900;
-    color: #ffd700;
-    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
-    pointer-events: none;
-    z-index: 60;
-    animation: scoreFloat 1s forwards;
-  }
-  
-  @keyframes scoreFloat {
-    0% { transform: translateY(0) scale(0.5); opacity: 0; }
-    20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
-    100% { transform: translateY(-80px) scale(1); opacity: 0; }
-  }
-  
-  .miss-popup {
-    color: #ff4444;
-    font-size: 24px;
-  }
-  
-  /* Key indicator pulse */
-  .key-pulse {
-    animation: keyPulse 1.5s infinite;
-  }
-  
-  @keyframes keyPulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 4px 0 #b8860b, 0 0 0 rgba(255,215,0,0); }
-    50% { transform: scale(1.05); box-shadow: 0 4px 0 #b8860b, 0 0 20px rgba(255,215,0,0.6); }
-  }
-  
-  .key-press {
-    animation: keyPress 0.15s;
-  }
-  
-  @keyframes keyPress {
-    0%, 100% { transform: translateY(0); box-shadow: 0 4px 0 #b8860b; }
-    50% { transform: translateY(4px); box-shadow: 0 0 0 #b8860b; }
-  }
-  
-  /* Screen shake */
-  @keyframes shake {
-    0%, 100% { transform: translate(0,0); }
-    25% { transform: translate(-3px, 2px); }
-    50% { transform: translate(3px, -2px); }
-    75% { transform: translate(-2px, -2px); }
-  }
-  
-  .shake { animation: shake 0.2s; }
-  
-  /* HUD */
-  .hud-card {
-    background: rgba(0,0,0,0.55);
-    backdrop-filter: blur(8px);
-    border: 2px solid rgba(255,255,255,0.2);
-    border-radius: 12px;
-  }
-  
-  /* Modal */
-  .modal-bg {
-    background: linear-gradient(135deg, #4a9c3a 0%, #4a9c3a 50%, #4a9c3a 100%);
-  }
-  
-  .btn-primary {
-    background: linear-gradient(180deg, #ffd700 0%, #ffa500 100%);
-    box-shadow: 0 6px 0 #b8860b, 0 8px 20px rgba(0,0,0,0.3);
-    transition: all 0.1s;
-  }
-  .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 #b8860b, 0 10px 24px rgba(0,0,0,0.4);
-  }
-  .btn-primary:active {
-    transform: translateY(4px);
-    box-shadow: 0 2px 0 #b8860b, 0 4px 10px rgba(0,0,0,0.3);
-  }
-  
-  .timer-bar {
-    transition: width 1s linear;
-  }
-  
-  /* Ground grass */
-  .grass-line {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.2));
-    pointer-events: none;
-  }
-  
-  /* Combo system */
-  #combo-display {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0);
-    z-index: 70;
-    pointer-events: none;
-    text-align: center;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  #combo-display.show {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  .combo-text {
-    font-family: 'Bungee', cursive;
-    font-size: 56px;
-    color: #fff;
-    text-shadow: 3px 3px 0 #ff6b00, -2px -2px 0 #ff6b00, 2px -2px 0 #ff6b00, -2px 2px 0 #ff6b00;
-    line-height: 1;
-  }
-  .combo-sub {
-    font-family: 'Bungee', cursive;
-    font-size: 22px;
-    color: #ffd700;
-    text-shadow: 2px 2px 0 #000;
-    margin-top: 4px;
-  }
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Print Hunter</title>
+<link href="https://fonts.googleapis.com/css2?family=Anak+Manja&family=Bungee&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* Se a fonte Anak Manja não carregar online, coloque o arquivo AnakManja.ttf na mesma pasta deste HTML */
+@font-face { font-family: 'Anak Manja'; src: local('Anak Manja'), url('AnakManja.ttf') format('truetype'); font-display: swap; }
+:root {
+  --wood: #5b3a1e; --wood-d: #3b2412; --wood-l: #8a5a2b; --leaf: #4caf50; --leaf-d: #2e7d32;
+  --parch: #f6ecce; --gold: #ffd54a; --ink: #2b1d0e;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; font-family: 'Nunito', sans-serif; color: var(--ink); }
+.bungee { font-family: 'Bungee', cursive; }
+.hidden { display: none !important; }
+#app { position: relative; height: 100%; width: 100%; overflow: hidden; background: #1d4d2b; }
 
-  .combo-popup {
-    position: absolute;
-    font-family: 'Bungee', cursive;
-    font-size: 42px;
-    color: #ff6b00;
-    text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
-    pointer-events: none;
-    z-index: 65;
-    animation: comboFloat 1.2s forwards;
-  }
+/* ---------- GAME AREA / SCENARIOS ---------- */
+#game-area { position: absolute; inset: 0; cursor: none; overflow: hidden; }
+#game-area.sc-forest { background: linear-gradient(#8fd3f4 0%, #c8ecd0 45%, #6cbf4a 65%, #3f8a2e 100%); }
+#game-area.sc-urban  { background: linear-gradient(#f6a46b 0%, #f7d1a0 35%, #9aa5b1 62%, #4b525c 64%, #2f343b 100%); }
+#game-area.sc-desert { background: linear-gradient(#ffb36b 0%, #ffe3a3 45%, #f0c36f 62%, #d9a24a 100%); }
+#game-area.sc-snow   { background: linear-gradient(#a9c7e8 0%, #e3f0fb 50%, #ffffff 65%, #d6e6f4 100%); }
+.deco { position: absolute; user-select: none; pointer-events: none; }
+.cloud { position: absolute; background: #fff; border-radius: 50%; opacity: .8; filter: blur(2px); }
+.ground-shade { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(transparent, rgba(0,0,0,.25)); pointer-events: none; }
+#game-area.sc-urban:after { content:''; position:absolute; left:0; right:0; bottom:0; height:36%; background: repeating-linear-gradient(90deg, transparent 0 80px, rgba(255,255,255,.18) 80px 130px) bottom/100% 4px no-repeat; pointer-events:none; }
 
-  @keyframes comboFloat {
-    0% { transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); opacity: 0; }
-    20% { transform: translate(-50%, -80%) scale(1.4) rotate(5deg); opacity: 1; }
-    60% { transform: translate(-50%, -120%) scale(1.1) rotate(-2deg); opacity: 1; }
-    100% { transform: translate(-50%, -180%) scale(0.8) rotate(0deg); opacity: 0; }
-  }
+.animal { position: absolute; font-size: 60px; filter: drop-shadow(2px 4px 4px rgba(0,0,0,.3)); will-change: left, top; user-select: none; pointer-events: none; }
+.animal.golden { animation: goldPulse .5s infinite alternate; }
+@keyframes goldPulse { from { filter: drop-shadow(0 0 8px gold) drop-shadow(2px 4px 4px rgba(0,0,0,.3)); } to { filter: drop-shadow(0 0 20px gold) drop-shadow(2px 4px 4px rgba(0,0,0,.3)); } }
+.animal.captured { animation: captured .6s forwards; }
+@keyframes captured { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5) rotate(20deg); } 100% { transform: scale(0) rotate(360deg); opacity: 0; } }
 
-  /* HUD combo badge */
-  #combo-badge {
-    transition: all 0.3s;
-  }
-  #combo-badge.active {
-    animation: comboBadgePulse 0.4s;
-  }
-  @keyframes comboBadgePulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.3); }
-    100% { transform: scale(1); }
-  }
+/* Viewfinder */
+#viewfinder { position: absolute; pointer-events: none; width: 325px; height: 325px; transform: translate(-50%, -50%); z-index: 50; }
+.vf-frame { position: absolute; inset: 0; border: 3px solid rgba(255,248,220,.9); border-radius: 10px; box-shadow: 0 0 0 9999px rgba(10,30,12,.4); }
+.vf-frame:before, .vf-frame:after { content: ''; position: absolute; left: 50%; top: 50%; background: var(--gold); transform: translate(-50%, -50%); }
+.vf-frame:before { width: 30px; height: 2px; } .vf-frame:after { width: 2px; height: 30px; }
+.corner { position: absolute; width: 24px; height: 24px; border: 4px solid var(--gold); }
+.corner.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+.corner.tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
+.corner.bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
+.corner.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
 
-  /* Photo feedback */
-  .photo-capture {
-    position: absolute;
-    border: 4px solid white;
-    background: rgba(255,255,255,0.1);
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    pointer-events: none;
-    z-index: 55;
-    animation: photoShrink 0.8s forwards;
-  }
-  
-  @keyframes photoShrink {
-    0% { opacity: 1; transform: scale(1); }
-    60% { opacity: 1; transform: scale(0.8); }
-    100% { opacity: 0; transform: scale(0.3) translate(300px, -300px) rotate(15deg); }
-  }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 100; }
+#flash.active { animation: flash .3s; }
+@keyframes flash { 0% { opacity: 0; } 20% { opacity: .2; } 100% { opacity: 0; } }
+.shake { animation: shake .2s; }
+@keyframes shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(-3px,2px); } 50% { transform: translate(3px,-2px); } 75% { transform: translate(-2px,-2px); } }
+
+/* Gameplay fonts kept as original */
+.score-popup { position: absolute; font-family: 'Bungee', cursive; font-size: 32px; font-weight: 900; color: #ffd700; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; pointer-events: none; z-index: 60; animation: scoreFloat 1s forwards; }
+.miss-popup { color: #ff4444; font-size: 24px; }
+@keyframes scoreFloat { 0% { transform: translate(-50%,-50%) scale(.5); opacity: 0; } 20% { transform: translate(-50%,-60%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%,-190%) scale(1); opacity: 0; } }
+.combo-popup { position: absolute; font-family: 'Bungee', cursive; font-size: 42px; text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; pointer-events: none; z-index: 65; animation: comboFloat 1.2s forwards; text-align: center; }
+@keyframes comboFloat { 0% { transform: translate(-50%,-50%) scale(.3) rotate(-10deg); opacity: 0; } 20% { transform: translate(-50%,-80%) scale(1.4) rotate(5deg); opacity: 1; } 60% { transform: translate(-50%,-120%) scale(1.1) rotate(-2deg); opacity: 1; } 100% { transform: translate(-50%,-180%) scale(.8); opacity: 0; } }
+.photo-capture { position: absolute; border: 4px solid #fff; background: rgba(255,255,255,.1); box-shadow: 0 0 20px rgba(0,0,0,.5); pointer-events: none; z-index: 55; animation: photoShrink .8s forwards; }
+@keyframes photoShrink { 0% { opacity: 1; transform: scale(1); } 60% { opacity: 1; transform: scale(.8); } 100% { opacity: 0; transform: scale(.3) translate(300px,-300px) rotate(15deg); } }
+
+/* ---------- HUD (wood + leaves) ---------- */
+#hud { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: stretch; gap: 12px; z-index: 40; pointer-events: none; }
+.plank { background: linear-gradient(180deg, var(--wood-l), var(--wood)); border: 3px solid var(--wood-d); border-radius: 14px; box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 4px 0 var(--wood-d), 0 8px 14px rgba(0,0,0,.35); color: #fff4d6; padding: 8px 16px; }
+.plank small { display: block; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #f5d9a1; }
+.plank .val { font-family: 'Bungee', cursive; font-size: 30px; line-height: 1.1; }
+#score { color: #ffe36e; } #combo-count { color: #ff9f43; }
+.timer { flex: 1; max-width: 460px; }
+.timer-top { display: flex; justify-content: space-between; align-items: center; }
+.timer-top .val { font-size: 22px; }
+.track { margin-top: 6px; height: 18px; background: #24160a; border-radius: 99px; border: 2px solid var(--wood-d); box-shadow: inset 0 3px 5px rgba(0,0,0,.6); overflow: hidden; }
+#time-bar { height: 100%; width: 100%; border-radius: 99px; transition: width 1s linear;
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 8px, transparent 8px 16px), linear-gradient(90deg, #2e9d3f, #a5d63f); box-shadow: inset 0 2px 0 rgba(255,255,255,.35); }
+#time-bar.low { background: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 8px, transparent 8px 16px), linear-gradient(90deg, #e8590c, #ffb703); animation: lowPulse .5s infinite alternate; }
+@keyframes lowPulse { to { filter: brightness(1.3); } }
+#combo-badge.active { animation: pop .4s; }
+@keyframes pop { 50% { transform: scale(1.25); } }
+.quit-btn { pointer-events: auto; }
+
+#tip-bar { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 40; pointer-events: none; display: flex; align-items: center; gap: 10px; font-weight: 800; }
+kbd { display: inline-block; padding: 4px 12px; background: var(--gold); color: var(--ink); font-weight: 900; font-family: 'Nunito'; border-radius: 8px; border-bottom: 4px solid #b8860b; font-size: 14px; }
+#tip-bar kbd { animation: keyPulse 1.5s infinite; }
+@keyframes keyPulse { 50% { transform: scale(1.06); box-shadow: 0 0 18px rgba(255,213,74,.7); } }
+#tip-bar kbd.press { animation: none; transform: translateY(3px); border-bottom-width: 1px; }
+
+/* ---------- MENUS ---------- */
+.screen { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: auto; }
+.forest-bg { position: absolute; inset: 0; background:
+  radial-gradient(ellipse at 50% -10%, rgba(255,240,170,.55), transparent 55%),
+  linear-gradient(#17402a 0%, #1f5c34 50%, #12361f 100%); overflow: hidden; }
+.forest-bg i { position: absolute; bottom: -10px; font-style: normal; opacity: .55; filter: brightness(.55) saturate(1.1); user-select: none; }
+.forest-bg b { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff7a8; box-shadow: 0 0 10px 3px rgba(255,247,120,.8); animation: fly 6s infinite ease-in-out alternate; }
+@keyframes fly { from { transform: translate(0,0); opacity: .2; } to { transform: translate(40px,-60px); opacity: 1; } }
+
+.panel { position: relative; width: 100%; max-width: 640px; background: var(--parch); border: 8px solid var(--wood); border-radius: 26px; box-shadow: 0 0 0 4px var(--wood-d), 0 20px 50px rgba(0,0,0,.55), inset 0 0 40px rgba(139,90,43,.25); overflow: hidden; }
+.panel-head { background: linear-gradient(180deg, #3f9a4a, #256b32); padding: 22px 20px 16px; text-align: center; border-bottom: 6px solid var(--wood); position: relative; }
+.panel-head:before { content: '🌿🍃🌿'; position: absolute; left: 14px; top: 8px; font-size: 20px; opacity: .8; }
+.panel-head:after { content: '🍃🌿🍃'; position: absolute; right: 14px; top: 8px; font-size: 20px; opacity: .8; }
+.logo { font-size: 58px; margin-bottom: 2px; }
+h1, h2 { margin: 0; color: #fff8dc; text-shadow: 0 3px 0 #1b4d24, 0 6px 12px rgba(0,0,0,.35); }
+h1 { font-family: 'Anak Manja', 'Bungee', cursive; font-size: clamp(44px, 9vw, 72px); font-weight: 400; line-height: 1; letter-spacing: .02em; }
+h2 { font-family: 'Bungee', cursive; font-size: 30px; }
+.subtitle { color: #e6f6d5; font-weight: 800; margin-top: 6px; }
+.panel-body { padding: 22px 26px 26px; display: flex; flex-direction: column; gap: 14px; }
+
+.btn { font-family: 'Bungee', cursive; font-size: 22px; color: #fff; border: none; cursor: pointer; padding: 14px 18px; border-radius: 16px; width: 100%;
+  background: linear-gradient(180deg, #5cc45f, #2e8b3a); box-shadow: 0 6px 0 #1b5c25, 0 10px 18px rgba(0,0,0,.3); text-shadow: 0 2px 0 rgba(0,0,0,.3); transition: transform .1s, box-shadow .1s; }
+.btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #1b5c25, 0 12px 22px rgba(0,0,0,.35); }
+.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #1b5c25; }
+.btn.wood { background: linear-gradient(180deg, var(--wood-l), var(--wood)); box-shadow: 0 6px 0 var(--wood-d), 0 10px 18px rgba(0,0,0,.3); font-size: 19px; }
+.btn.wood:hover { box-shadow: 0 8px 0 var(--wood-d), 0 12px 22px rgba(0,0,0,.35); }
+.btn.wood:active { box-shadow: 0 2px 0 var(--wood-d); }
+
+.back-btn { position: absolute; top: 16px; right: 16px; z-index: 60; font-family: 'Bungee', cursive; font-size: 14px; cursor: pointer; color: #fff4d6; padding: 10px 16px; border-radius: 12px; border: 3px solid var(--wood-d);
+  background: linear-gradient(180deg, var(--wood-l), var(--wood)); box-shadow: 0 4px 0 var(--wood-d), 0 6px 12px rgba(0,0,0,.35); }
+.back-btn:hover { filter: brightness(1.12); } .back-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--wood-d); }
+.quit-btn.back-btn { position: static; font-size: 13px; padding: 8px 12px; align-self: flex-start; }
+
+.how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.chip { background: #fff9e3; border: 3px solid #d8c48d; border-radius: 14px; padding: 10px 6px; text-align: center; font-size: 12px; font-weight: 700; }
+.chip div:first-child { font-size: 28px; } .chip b { display: block; font-size: 14px; }
+.chip kbd { padding: 1px 7px; font-size: 12px; }
+.legend { display: flex; justify-content: space-around; align-items: center; background: #ead9a5; border-radius: 14px; padding: 10px; text-align: center; font-weight: 800; font-size: 13px; }
+.legend .pts { font-family: 'Bungee'; font-size: 17px; color: var(--leaf-d); }
+.legend .pts.g { color: #b57a00; }
+.cur-scene { text-align: center; font-weight: 800; font-size: 14px; color: var(--wood); }
+
+.scene-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.scene-card { cursor: pointer; border: 5px solid var(--wood); border-radius: 18px; overflow: hidden; background: #fff9e3; text-align: center; transition: transform .12s; box-shadow: 0 4px 0 var(--wood-d); position: relative; padding: 0; font-family: inherit; }
+.scene-card:hover { transform: translateY(-3px) rotate(-.5deg); }
+.scene-card.sel { border-color: var(--gold); box-shadow: 0 0 0 4px #e0a800, 0 0 20px rgba(255,213,74,.8); }
+.scene-card.sel:after { content: '✔'; position: absolute; top: 6px; right: 8px; background: var(--leaf-d); color: #fff; border-radius: 50%; width: 26px; height: 26px; line-height: 26px; font-weight: 900; }
+.scene-thumb { height: 92px; font-size: 38px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding-bottom: 6px; }
+.scene-name { font-family: 'Bungee'; font-size: 16px; padding: 8px; color: var(--wood-d); }
+
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #fff9e3; border: 3px solid #d8c48d; border-radius: 16px; padding: 14px 16px; }
+.opt-row b { font-size: 17px; display: block; } .opt-row span { font-size: 13px; color: #6b5532; font-weight: 700; }
+.switch { flex: none; width: 66px; height: 36px; border-radius: 99px; border: 3px solid var(--wood-d); background: #9c8a6b; position: relative; cursor: pointer; transition: background .15s; }
+.switch:after { content: ''; position: absolute; top: 2px; left: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff4d6; box-shadow: 0 2px 4px rgba(0,0,0,.4); transition: left .15s; }
+.switch.on { background: var(--leaf); } .switch.on:after { left: 32px; }
+
+.end-score { text-align: center; }
+.end-score small { font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #7a6540; }
+#final-score { font-family: 'Bungee'; font-size: 70px; color: #e8751a; line-height: 1.1; }
+#rank-text { font-weight: 900; font-size: 19px; color: var(--wood); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat { background: #fff9e3; border: 3px solid #d8c48d; border-radius: 14px; padding: 10px; text-align: center; }
+.stat small { font-weight: 900; text-transform: uppercase; font-size: 11px; color: #7a6540; }
+.stat div { font-family: 'Bungee'; font-size: 26px; color: var(--wood-d); }
+.tip { font-size: 12px; text-align: center; color: #6b5532; border-top: 2px dashed #cdb67a; padding-top: 12px; }
 </style>
-  <style>body { box-sizing: border-box; }</style>
-  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
- </head>
- <body class="h-full w-full">
-  <main id="app" class="relative h-full w-full overflow-hidden"><!-- GAME AREA -->
-   <div id="game-area" class="absolute inset-0"><!-- Decorative clouds and trees added via JS -->
-    <div class="grass-line"></div><!-- Flash overlay -->
-    <div id="flash"></div><!-- Viewfinder -->
-    <div id="viewfinder" class="hidden">
-     <div class="viewfinder-frame">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
-      <div class="zoom-indicator" id="zoom-text">
-       ZOOM 1x
+</head>
+<body>
+<main id="app">
+  <div id="game-area" class="sc-forest">
+    <div class="ground-shade"></div>
+    <div id="flash"></div>
+    <div id="viewfinder" class="hidden"><div class="vf-frame"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div></div>
+  </div>
+
+  <header id="hud" class="hidden">
+    <div class="plank"><small>Pontos</small><div id="score" class="val">0</div></div>
+    <div class="plank timer">
+      <div class="timer-top"><small>🌲 Tempo</small><span id="time-text" class="val">120s</span></div>
+      <div class="track"><div id="time-bar"></div></div>
+    </div>
+    <div class="plank" style="text-align:right"><small>Fotos</small><div id="photos" class="val">0</div></div>
+    <div id="combo-badge" class="plank hidden" style="text-align:center"><small>Combo</small><div id="combo-count" class="val">x1</div></div>
+    <button class="quit-btn back-btn" id="quit-btn" title="Voltar ao menu">✕ MENU</button>
+  </header>
+
+  <div id="tip-bar" class="plank hidden"><kbd id="print-key">PrintScr</kbd><span id="tip-text">Fotografar</span></div>
+
+  <!-- MENU INICIAL -->
+  <section id="menu" class="screen">
+    <div class="forest-bg" data-forest></div>
+    <div class="panel" style="max-width:560px">
+      <div class="panel-head">
+        <div class="logo">📸🦊</div>
+        <h1>Print Hunter</h1>
+        <div class="subtitle">Aprenda o atalho PrintScreen caçando fotos na natureza</div>
       </div>
-     </div>
-    </div>
-   </div><!-- HUD -->
-   <header id="hud" class="absolute top-4 left-4 right-4 flex justify-between items-start gap-3 z-40 hidden pointer-events-none">
-    <div class="hud-card px-5 py-3 text-white">
-     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">
-      Pontos
-     </div>
-     <div id="score" class="font-display text-3xl text-yellow-300">
-      0
-     </div>
-    </div>
-    <div class="hud-card px-5 py-3 text-white flex-1 max-w-md">
-     <div class="flex justify-between items-center mb-2"><span class="text-xs opacity-70 font-bold uppercase tracking-wider">Tempo</span> <span id="time-text" class="font-display text-xl">90s</span>
-     </div>
-     <div class="w-full h-3 bg-black/40 rounded-full overflow-hidden">
-      <div id="time-bar" class="timer-bar h-full bg-gradient-to-r from-green-400 to-yellow-400 rounded-full" style="width: 100%"></div>
-     </div>
-    </div>
-    <div class="hud-card px-5 py-3 text-white text-right">
-     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">
-      Fotos
-     </div>
-     <div id="photos" class="font-display text-3xl">
-      0
-     </div>
-    </div>
-    <div id="combo-badge" class="hud-card px-5 py-3 text-white text-center hidden">
-     <div class="text-xs opacity-70 font-bold uppercase tracking-wider">Combo</div>
-     <div id="combo-count" class="font-display text-3xl text-orange-400">x1</div>
-    </div>
-   </header><!-- Bottom tip bar (during game) -->
-   <div id="tip-bar" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 hidden pointer-events-none">
-    <div class="hud-card px-6 py-3 text-white flex items-center gap-4">
-     <div class="flex items-center gap-2"><kbd class="key-pulse inline-flex items-center justify-center px-3 py-1.5 bg-yellow-400 text-gray-900 font-bold rounded-md text-sm border-b-4 border-yellow-600" id="print-key">PrintScr</kbd> <span class="text-sm font-bold">Fotografar</span>
-     </div>
-     <div class="w-px h-6 bg-white/30"></div>
-     <div class="flex items-center gap-2"><kbd class="inline-flex items-center justify-center px-3 py-1.5 bg-white/90 text-gray-900 font-bold rounded-md text-sm border-b-4 border-gray-400">Z</kbd> <span class="text-sm font-bold">Zoom</span>
-     </div>
-    </div>
-   </div><!-- START MODAL -->
-   <div id="start-modal" class="absolute inset-0 z-50 flex items-center justify-center p-6">
-    <div class="modal-bg absolute inset-0"></div>
-    <div class="relative max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
-     <div class="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 p-8 text-center relative">
-      <div class="text-7xl mb-2">
-       📸🦆
+      <div class="panel-body">
+        <div class="how">
+          <div class="chip"><div>🎯</div><b>Mire</b>Mova o mouse</div>
+          <div class="chip"><div>📷</div><b>Fotografe</b><span data-action-label></span></div>
+          <div class="chip"><div>✨</div><b>Combo</b>2+ animais = bônus</div>
+        </div>
+        <div class="legend">
+          <div>🦊<div>Normal</div><div class="pts">+5 pts</div></div>
+          <div><span style="filter:drop-shadow(0 0 6px gold)">🦌</span><div>Dourado (rápido)</div><div class="pts g">+10 pts</div></div>
+        </div>
+        <div class="cur-scene">Cenário: <span id="cur-scene-name"></span></div>
+        <button id="start-btn" class="btn">▶ COMEÇAR</button>
+        <button id="go-scenes" class="btn wood">🗺️ CENÁRIOS</button>
+        <button id="go-options" class="btn wood">⚙️ OPÇÕES</button>
       </div>
-      <h1 id="title" class="font-display text-4xl md:text-5xl text-white drop-shadow-lg">Caça Cliques</h1>
-      <p id="subtitle" class="text-white/90 font-bold mt-2">Aprenda o atalho PrintScreen</p>
-     </div>
-     <div class="p-8 space-y-5">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-       <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
-        <div class="text-3xl mb-1">
-         🎯
-        </div>
-        <div class="font-bold text-blue-900 text-sm">
-         Mire
-        </div>
-        <div class="text-xs text-blue-700">
-         Mova o mouse
-        </div>
-       </div>
-       <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4 text-center">
-        <div class="text-3xl mb-1">
-         🔍
-        </div>
-        <div class="font-bold text-purple-900 text-sm">
-         Dê Zoom
-        </div>
-        <div class="text-xs text-purple-700">
-         Segure <kbd class="bg-white px-1.5 rounded border">Z</kbd>
-        </div>
-       </div>
-       <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-center">
-        <div class="text-3xl mb-1">
-         📷
-        </div>
-        <div class="font-bold text-yellow-900 text-sm">
-         Fotografe
-        </div>
-        <div class="text-xs text-yellow-700">
-         Pressione <kbd class="bg-white px-1.5 rounded border">PrintScr</kbd>
-        </div>
-       </div>
-      </div>
-      <div class="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-       <div class="flex items-center justify-around text-center">
-        <div>
-         <div class="text-4xl">
-          🦊
-         </div>
-         <div class="font-bold text-gray-800 text-sm mt-1">
-          Animal Normal
-         </div>
-         <div class="text-green-600 font-display text-lg">
-          +5 pts
-         </div>
-        </div>
-        <div class="w-px h-16 bg-gray-300"></div>
-        <div>
-         <div class="text-4xl" style="filter: drop-shadow(0 0 8px gold);">
-          🦌
-         </div>
-         <div class="font-bold text-gray-800 text-sm mt-1">
-          Dourado (rápido)
-         </div>
-         <div class="text-yellow-600 font-display text-lg">
-          +10 pts
-         </div>
-        </div>
-        <div class="w-px h-16 bg-gray-300"></div>
-        <div>
-         <div class="text-3xl mb-1">📸✖️2</div>
-         <div class="font-bold text-gray-800 text-sm mt-1">Combo (2+ animais)</div>
-         <div class="text-orange-600 font-display text-lg">pts × combo!</div>
-        </div>
-       </div>
-      </div>
-      <p id="instructions" class="text-center text-gray-600 text-sm">Você tem <b>1 minuto</b> para fotografar o máximo possível! Pressione <kbd class="bg-gray-100 px-8 py-0.5 rounded border font-mono">PrintScr</kbd> antes que o animal saia da tela.</p><button id="start-btn" class="btn-primary w-full py-4 rounded-2xl font-display text-2xl text-gray-900"> <span id="start-btn-text">COMEÇAR</span> </button>
-      <p class="text-xs text-center text-gray-700">💡 Dica: a tecla <b>PrintScr</b> fica geralmente no canto superior direito do teclado</p>
-     </div>
     </div>
-   </div><!-- END MODAL -->
-   <div id="end-modal" class="absolute inset-0 z-50 flex items-center justify-center p-6 hidden">
-    <div class="modal-bg absolute inset-0"></div>
-    <div class="relative max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
-     <div class="bg-gradient-to-r from-green-400 via-teal-500 to-blue-500 p-8 text-center">
-      <div class="text-6xl mb-2">
-       🏆
+  </section>
+
+  <!-- CENÁRIOS -->
+  <section id="scenes" class="screen hidden">
+    <div class="forest-bg" data-forest></div>
+    <button class="back-btn" data-menu>⌂ MENU INICIAL</button>
+    <div class="panel" style="max-width:600px">
+      <div class="panel-head"><h2>Escolha o cenário</h2></div>
+      <div class="panel-body">
+        <div class="scene-grid" id="scene-grid"></div>
+        <button id="scene-play" class="btn">▶ JOGAR</button>
       </div>
-      <h2 class="font-display text-4xl text-white drop-shadow-lg">Tempo Esgotado!</h2>
-     </div>
-     <div class="p-8 space-y-4">
-      <div class="text-center">
-       <div class="text-sm text-gray-500 font-bold uppercase tracking-wider">
-        Sua Pontuação
-       </div>
-       <div id="final-score" class="font-display text-6xl text-orange-500">
-        0
-       </div>
-       <div id="rank-text" class="font-bold text-lg text-gray-700 mt-1">
-        Fotógrafo Iniciante
-       </div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-       <div class="bg-blue-50 rounded-xl p-3 text-center">
-        <div class="text-xs text-blue-700 font-bold uppercase">
-         Fotos
-        </div>
-        <div id="final-photos" class="font-display text-2xl text-blue-900">
-         0
-        </div>
-       </div>
-       <div class="bg-yellow-50 rounded-xl p-3 text-center">
-        <div class="text-xs text-yellow-700 font-bold uppercase">
-         Dourados
-        </div>
-        <div id="final-golden" class="font-display text-2xl text-yellow-900">
-         0
-        </div>
-       </div>
-      </div><button id="restart-btn" class="btn-primary w-full py-4 rounded-2xl font-display text-xl text-gray-900"> JOGAR NOVAMENTE </button>
-	   <div class="mt-6 pt-6 border-t border-gray-200">
-       <p class="text-xs text-gray-600 text-center"><strong>💡 Dica:</strong> Salve seu resultado! Pressione <kbd class="bg-gray-100 px-2 py-0.5 rounded border font-mono font-bold">Win + PrintScr</kbd> para capturar a tela. O print será salvo em <span class="font-mono text-gray-700">Imagens → Capturas de Tela</span></p>
-      </div>
-     </div>
     </div>
-   </div>
-  </main>
-  <script>
-  const defaultConfig = {
-    game_title: "Caça Cliques",
-    game_subtitle: "Aprenda o atalho PrintScreen",
-    instruction_text: "Você tem 1 minuto para fotografar o máximo possível! Pressione PrintScr antes que o animal saia da tela.",
-    start_button_text: "COMEÇAR"
-  };
+  </section>
 
-  const ANIMALS = ['🦊','🐰','🦌','🐿️','🦔','🐗','🦝','🐻','🦡','🐺','😺','🦒', '🦁','🐯','🐶','🐮','🐷','🐭','🐹','🐲','🦄','🦓','🐴','🐸','🐼','🐨','🐢','🐌','🦉','🦩','🦚','🐧','🐞','🐝','🐜','🦜','🦢','🦔'];
-  const GAME_DURATION = 120;
+  <!-- OPÇÕES -->
+  <section id="options" class="screen hidden">
+    <div class="forest-bg" data-forest></div>
+    <button class="back-btn" data-menu>⌂ MENU INICIAL</button>
+    <div class="panel" style="max-width:520px">
+      <div class="panel-head"><h2>Opções</h2></div>
+      <div class="panel-body">
+        <div class="opt-row"><div><b>🔇 Mutar efeitos sonoros</b><span>Desliga todos os sons do jogo</span></div><div class="switch" id="sw-mute" role="switch" tabindex="0"></div></div>
+        <div class="opt-row"><div><b>🖱️ Clicar com o mouse</b><span>Fotografe clicando, em vez de usar a tecla PrintScr</span></div><div class="switch" id="sw-click" role="switch" tabindex="0"></div></div>
+      </div>
+    </div>
+  </section>
 
-  const gameArea = document.getElementById('game-area');
-  const viewfinder = document.getElementById('viewfinder');
-  const zoomText = document.getElementById('zoom-text');
-  const flash = document.getElementById('flash');
-  const scoreEl = document.getElementById('score');
-  const photosEl = document.getElementById('photos');
-  const timeText = document.getElementById('time-text');
-  const timeBar = document.getElementById('time-bar');
-  const hud = document.getElementById('hud');
-  const tipBar = document.getElementById('tip-bar');
-  const startModal = document.getElementById('start-modal');
-  const endModal = document.getElementById('end-modal');
-  const startBtn = document.getElementById('start-btn');
-  const restartBtn = document.getElementById('restart-btn');
-  const printKey = document.getElementById('print-key');
-  const comboBadge = document.getElementById('combo-badge');
-  const comboCount = document.getElementById('combo-count');
+  <!-- FIM DE JOGO -->
+  <section id="end-modal" class="screen hidden">
+    <div class="forest-bg" data-forest></div>
+    <button class="back-btn" data-menu>⌂ MENU INICIAL</button>
+    <div class="panel" style="max-width:500px">
+      <div class="panel-head"><div class="logo">🏆</div><h2>Tempo esgotado!</h2></div>
+      <div class="panel-body">
+        <div class="end-score"><small>Sua pontuação</small><div id="final-score">0</div><div id="rank-text"></div></div>
+        <div class="stats">
+          <div class="stat"><small>Fotos</small><div id="final-photos">0</div></div>
+          <div class="stat"><small>Dourados</small><div id="final-golden">0</div></div>
+        </div>
+        <button id="restart-btn" class="btn">↻ JOGAR NOVAMENTE</button>
+        <div class="tip">💡 Salve seu resultado! Pressione <kbd>Win + PrintScr</kbd> para capturar a tela. O print será salvo em <b>Imagens → Capturas de Tela</b></div>
+      </div>
+    </div>
+  </section>
+</main>
 
-  // Button sounds
-  startBtn.addEventListener('mousedown', playBtnClick);
-  restartBtn.addEventListener('mousedown', playBtnClick);
+<script>
+const ANIMALS = ['🦊','🐰','🦌','🐿️','🦔','🐗','🦝','🐻','🦡','🐺','😺','🦒','🦁','🐯','🐶','🐮','🐷','🐭','🐹','🐲','🦄','🦓','🐴','🐸','🐼','🐨','🐢','🐌','🦉','🦩','🦚','🐧','🐞','🐝','🐜','🦜','🦢'];
+const GAME_DURATION = 120;
+const SCENARIOS = {
+  forest: { name: 'Floresta', icon: '🌲', deco: ['🌲','🌳','🌲','🌳','🌴'], clouds: true, thumb: 'linear-gradient(#8fd3f4,#6cbf4a)', th: '🌲🌳🌲' },
+  urban:  { name: 'Urbano',   icon: '🏙️', deco: ['🏢','🏬','🏭','🏙️','🏢'], clouds: true, thumb: 'linear-gradient(#f6a46b,#9aa5b1 60%,#3a4048)', th: '🏢🏬🏙️' },
+  desert: { name: 'Deserto',  icon: '🏜️', deco: ['🌵','🌵','🪨','🌴','🌵'], clouds: false, thumb: 'linear-gradient(#ffb36b,#e9c06c)', th: '🌵🏜️🌵' },
+  snow:   { name: 'Neve',     icon: '❄️', deco: ['🌲','🌲','⛄','🏔️','🌲'], clouds: true, thumb: 'linear-gradient(#a9c7e8,#fff)', th: '⛄🌲🏔️' }
+};
 
-  // ── SOUND SYSTEM ──────────────────────────────────────────────────────────
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let audioCtx = null;
+const $ = id => document.getElementById(id);
+const gameArea = $('game-area'), viewfinder = $('viewfinder'), flash = $('flash'), hud = $('hud'), tipBar = $('tip-bar');
+const printKey = $('print-key'), comboBadge = $('combo-badge'), comboCount = $('combo-count');
+const screens = ['menu','scenes','options','end-modal'];
 
-  function getAudioCtx() {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    return audioCtx;
+// ── SETTINGS ──
+let settings = { muted: false, clickMode: false, scenario: 'forest' };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('printHunter') || '{}')); } catch (e) {}
+if (!SCENARIOS[settings.scenario]) settings.scenario = 'forest';
+function save() { try { localStorage.setItem('printHunter', JSON.stringify(settings)); } catch (e) {} }
+
+// ── SOUND ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ac() { if (settings.muted) return null; try { return audioCtx || (audioCtx = new AudioCtx()); } catch (e) { return null; } }
+function tone(type, f, t0, dur, vol, f2) {
+  const ctx = ac(); if (!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + t0;
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function playShutter() {
+  const ctx = ac(); if (!ctx) return;
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.12, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) { const t = i / ctx.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 80) * 0.6 + Math.sin(2 * Math.PI * 180 * t) * Math.exp(-t * 60) * 0.3; }
+  const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buf; g.gain.value = 0.7; src.connect(g); g.connect(ctx.destination); src.start();
+  tone('sine', 1800, 0, 0.08, 0.25, 400);
+}
+const playCaptureBlip = golden => (golden ? [880, 1100, 1320] : [523, 659, 784]).forEach((f, i) => tone(golden ? 'sine' : 'square', f, i * 0.06, 0.12, golden ? 0.18 : 0.1));
+const playMiss = () => tone('sawtooth', 220, 0, 0.15, 0.2, 80);
+const playCombo = n => { const b = 523 * Math.pow(1.12, n - 2); [1, 1.26, 1.5].forEach((m, i) => tone('sine', b * m, i * 0.07, 0.2, 0.22)); };
+const playBtnClick = () => tone('sine', 600, 0, 0.1, 0.18, 900);
+const playGameOver = () => [523, 415, 330, 262].forEach((f, i) => tone('sine', f, i * 0.18, 0.22, 0.25));
+const playCountdownBeep = urgent => tone('sine', urgent ? 880 : 660, 0, 0.12, 0.15);
+
+// ── SCREENS ──
+function show(id) {
+  screens.forEach(s => $(s).classList.toggle('hidden', s !== id));
+}
+function stopGame() {
+  state.running = false;
+  clearInterval(timerInterval);
+  if (animationFrame) cancelAnimationFrame(animationFrame);
+  state.animals.forEach(a => a.el.remove()); state.animals = [];
+  hideComboBadge();
+  hud.classList.add('hidden'); tipBar.classList.add('hidden'); viewfinder.classList.add('hidden');
+}
+function goMenu() { stopGame(); applyScenario(); show('menu'); }
+document.querySelectorAll('[data-menu]').forEach(b => b.addEventListener('click', goMenu));
+$('quit-btn').addEventListener('click', e => { e.stopPropagation(); goMenu(); });
+$('go-scenes').addEventListener('click', () => show('scenes'));
+$('go-options').addEventListener('click', () => show('options'));
+document.addEventListener('mousedown', e => { if (e.target.closest('button, .switch')) playBtnClick(); });
+
+// forest decoration for menus
+document.querySelectorAll('[data-forest]').forEach(el => {
+  let h = '';
+  for (let i = 0; i < 16; i++) h += `<i style="left:${i * 6.5 - 2}%;font-size:${70 + (i * 37) % 60}px">${['🌲','🌳','🌲'][i % 3]}</i>`;
+  for (let i = 0; i < 14; i++) h += `<b style="left:${(i * 53) % 100}%;top:${20 + (i * 29) % 60}%;animation-delay:${(i % 6) * .8}s"></b>`;
+  el.innerHTML = h;
+});
+
+// ── OPTIONS UI ──
+function syncOptions() {
+  $('sw-mute').classList.toggle('on', settings.muted);
+  $('sw-click').classList.toggle('on', settings.clickMode);
+  $('sw-mute').setAttribute('aria-checked', settings.muted);
+  $('sw-click').setAttribute('aria-checked', settings.clickMode);
+  document.querySelector('[data-action-label]').innerHTML = settings.clickMode ? 'Clique com o <kbd>mouse</kbd>' : 'Pressione <kbd>PrintScr</kbd>';
+  printKey.textContent = settings.clickMode ? 'CLIQUE' : 'PrintScr';
+  $('tip-text').textContent = 'Fotografar';
+}
+function toggle(key) { settings[key] = !settings[key]; save(); syncOptions(); }
+['sw-mute','sw-click'].forEach((id, i) => {
+  const k = i ? 'clickMode' : 'muted';
+  $(id).addEventListener('click', () => toggle(k));
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(k); } });
+});
+
+// ── SCENARIO UI ──
+function buildSceneGrid() {
+  $('scene-grid').innerHTML = Object.entries(SCENARIOS).map(([k, s]) =>
+    `<button class="scene-card ${k === settings.scenario ? 'sel' : ''}" data-sc="${k}"><div class="scene-thumb" style="background:${s.thumb}">${s.th}</div><div class="scene-name">${s.icon} ${s.name}</div></button>`).join('');
+  $('scene-grid').querySelectorAll('.scene-card').forEach(c => c.addEventListener('click', () => {
+    settings.scenario = c.dataset.sc; save(); buildSceneGrid(); applyScenario();
+  }));
+}
+function applyScenario() {
+  gameArea.className = 'sc-' + settings.scenario;
+  $('cur-scene-name').textContent = SCENARIOS[settings.scenario].icon + ' ' + SCENARIOS[settings.scenario].name;
+  createScenery();
+}
+function createScenery() {
+  gameArea.querySelectorAll('.cloud, .deco').forEach(n => n.remove());
+  const sc = SCENARIOS[settings.scenario], rect = gameArea.getBoundingClientRect();
+  if (sc.clouds) for (let i = 0; i < 5; i++) {
+    const c = document.createElement('div'), s = 60 + Math.random() * 80;
+    c.className = 'cloud'; c.style.cssText = `width:${s}px;height:${s * .6}px;left:${Math.random() * rect.width}px;top:${20 + Math.random() * rect.height * .3}px`;
+    gameArea.appendChild(c);
+  } else {
+    const sun = document.createElement('div'); sun.className = 'deco'; sun.textContent = '☀️'; sun.style.cssText = `font-size:90px;right:10%;top:8%`; gameArea.appendChild(sun);
   }
-
-  function playShutter() {
-    try {
-      const ctx = getAudioCtx();
-      // Mechanical click
-      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.12, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) {
-        const t = i / ctx.sampleRate;
-        d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 80) * 0.6
-               + Math.sin(2 * Math.PI * 180 * t) * Math.exp(-t * 60) * 0.3;
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.7, ctx.currentTime);
-      src.connect(g); g.connect(ctx.destination);
-      src.start();
-
-      // High-pitch flash "zing"
-      const osc = ctx.createOscillator();
-      const g2 = ctx.createGain();
-      osc.frequency.setValueAtTime(1800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
-      g2.gain.setValueAtTime(0.25, ctx.currentTime);
-      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-      osc.connect(g2); g2.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.08);
-    } catch(e) {}
+  const urban = settings.scenario === 'urban', n = urban ? 9 : 8;
+  for (let i = 0; i < n; i++) {
+    const t = document.createElement('div'); t.className = 'deco'; t.textContent = sc.deco[Math.floor(Math.random() * sc.deco.length)];
+    const size = urban ? 90 + Math.random() * 60 : 50 + Math.random() * 50;
+    t.style.cssText = `left:${(i / n) * rect.width + Math.random() * 60 - 20}px;font-size:${size}px;bottom:${urban ? 34 + Math.random() * 12 : -10 + Math.random() * 20}%;opacity:.75`;
+    if (!urban) t.style.bottom = (-10 + Math.random() * 20) + 'px'; else t.style.bottom = (rect.height * .34 - 20) + 'px';
+    gameArea.appendChild(t);
   }
+}
 
-  function playCaptureBlip(golden) {
-    try {
-      const ctx = getAudioCtx();
-      const freqs = golden ? [880, 1100, 1320] : [523, 659, 784];
-      freqs.forEach((f, i) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = golden ? 'sine' : 'square';
-        osc.frequency.value = f;
-        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.06);
-        g.gain.linearRampToValueAtTime(golden ? 0.18 : 0.1, ctx.currentTime + i * 0.06 + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.06 + 0.12);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(ctx.currentTime + i * 0.06);
-        osc.stop(ctx.currentTime + i * 0.06 + 0.12);
-      });
-    } catch(e) {}
-  }
+// ── GAME STATE ──
+let state = { running: false, score: 0, photos: 0, golden: 0, time: GAME_DURATION, mouseX: 0, mouseY: 0, animals: [], lastSpawn: 0, spawnInterval: 1400, animalId: 0 };
+let timerInterval = null, animationFrame = null, lastTime = 0, photoCooldown = false;
 
-  function playMiss() {
-    try {
-      const ctx = getAudioCtx();
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.15);
-      g.gain.setValueAtTime(0.2, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.15);
-    } catch(e) {}
-  }
+document.addEventListener('mousemove', e => {
+  state.mouseX = e.clientX; state.mouseY = e.clientY;
+  if (state.running) { viewfinder.style.left = e.clientX + 'px'; viewfinder.style.top = e.clientY + 'px'; }
+});
 
-  function playCombo(count) {
-    try {
-      const ctx = getAudioCtx();
-      // Ascending fanfare based on combo count
-      const baseFreq = 523 * Math.pow(1.12, count - 2);
-      [0, 0.07, 0.14].forEach((delay, i) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = baseFreq * [1, 1.26, 1.5][i];
-        g.gain.setValueAtTime(0, ctx.currentTime + delay);
-        g.gain.linearRampToValueAtTime(0.22, ctx.currentTime + delay + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + delay + 0.2);
-      });
-    } catch(e) {}
-  }
+const isPrint = e => e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.key === 'Print' || e.keyCode === 44;
+document.addEventListener('keydown', e => { if (state.running && !settings.clickMode && isPrint(e)) { e.preventDefault(); takePhoto(); } });
+document.addEventListener('keyup', e => { if (state.running && !settings.clickMode && isPrint(e)) { e.preventDefault(); takePhoto(); } });
+document.addEventListener('mousedown', e => {
+  if (state.running && settings.clickMode && e.button === 0 && !e.target.closest('button')) takePhoto();
+});
 
-  function playBtnClick() {
-    try {
-      const ctx = getAudioCtx();
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.06);
-      g.gain.setValueAtTime(0.18, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.1);
-    } catch(e) {}
-  }
+function takePhoto() {
+  if (photoCooldown) return;
+  photoCooldown = true; setTimeout(() => photoCooldown = false, 250);
+  playShutter();
+  flash.classList.remove('active'); void flash.offsetWidth; flash.classList.add('active');
+  printKey.classList.add('press'); setTimeout(() => printKey.classList.remove('press'), 150);
 
-  function playGameOver() {
-    try {
-      const ctx = getAudioCtx();
-      const melody = [523, 415, 330, 262];
-      melody.forEach((f, i) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = f;
-        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
-        g.gain.linearRampToValueAtTime(0.25, ctx.currentTime + i * 0.18 + 0.04);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.22);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(ctx.currentTime + i * 0.18);
-        osc.stop(ctx.currentTime + i * 0.18 + 0.25);
-      });
-    } catch(e) {}
-  }
+  const vf = viewfinder.getBoundingClientRect(), pr = document.createElement('div');
+  pr.className = 'photo-capture';
+  pr.style.cssText = `left:${vf.left}px;top:${vf.top}px;width:${vf.width}px;height:${vf.height}px`;
+  gameArea.appendChild(pr); setTimeout(() => pr.remove(), 800);
 
-  function playCountdownBeep(urgent) {
-    try {
-      const ctx = getAudioCtx();
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = urgent ? 880 : 660;
-      g.gain.setValueAtTime(0.15, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.12);
-    } catch(e) {}
-  }
-  // ──────────────────────────────────────────────────────────────────────────
-
-  let state = {
-    running: false,
-    score: 0,
-    photos: 0,
-    golden: 0,
-    time: GAME_DURATION,
-    zoomed: false,
-    mouseX: 0,
-    mouseY: 0,
-    animals: [],
-    lastSpawn: 0,
-    spawnInterval: 1400,
-    animalId: 0
-  };
-
-  let timerInterval = null;
-  let animationFrame = null;
-
-  // Decorative background
-  function createScenery() {
-    // Remove old scenery
-    gameArea.querySelectorAll('.cloud, .tree').forEach(n => n.remove());
-    
-    const rect = gameArea.getBoundingClientRect();
-    // Clouds
-    for (let i = 0; i < 5; i++) {
-      const cloud = document.createElement('div');
-      cloud.className = 'cloud';
-      const size = 60 + Math.random() * 80;
-      cloud.style.width = size + 'px';
-      cloud.style.height = (size * 0.6) + 'px';
-      cloud.style.left = Math.random() * rect.width + 'px';
-      cloud.style.top = (20 + Math.random() * (rect.height * 0.35)) + 'px';
-      gameArea.appendChild(cloud);
-    }
-    // Trees
-    const treeEmojis = ['🌲','🌳','🌴','🌲','🌳'];
-    for (let i = 0; i < 7; i++) {
-      const tree = document.createElement('div');
-      tree.className = 'tree';
-      tree.textContent = treeEmojis[Math.floor(Math.random() * treeEmojis.length)];
-      tree.style.left = (Math.random() * rect.width) + 'px';
-      tree.style.fontSize = (50 + Math.random() * 50) + 'px';
-      tree.style.bottom = (-10 + Math.random() * 20) + 'px';
-      gameArea.appendChild(tree);
-    }
-  }
-
-  // Mouse tracking
-  document.addEventListener('mousemove', (e) => {
-    state.mouseX = e.clientX;
-    state.mouseY = e.clientY;
-    if (state.running) {
-      viewfinder.style.left = e.clientX + 'px';
-      viewfinder.style.top = e.clientY + 'px';
+  const cx = state.mouseX, cy = state.mouseY, radius = 130;
+  let caught = 0, gained = 0, list = [];
+  state.animals.forEach(a => {
+    if (a.captured) return;
+    const r = a.el.getBoundingClientRect(), ax = r.left + r.width / 2, ay = r.top + r.height / 2;
+    if (Math.hypot(ax - cx, ay - cy) < radius) {
+      a.captured = true; const pts = a.golden ? 10 : 5;
+      gained += pts; caught++; if (a.golden) state.golden++;
+      list.push({ a, ax, ay, pts });
+      a.el.classList.add('captured');
+      setTimeout(() => { a.el.remove(); state.animals = state.animals.filter(x => x !== a); }, 600);
     }
   });
 
-  // Keyboard handling
-  document.addEventListener('keydown', (e) => {
-    if (!state.running) return;
-
-    // Zoom with Z
-    if (e.key === 'z' || e.key === 'Z') {
-      if (!state.zoomed) {
-        state.zoomed = true;
-        viewfinder.classList.add('zoomed');
-        zoomText.textContent = 'ZOOM 2x';
-      }
-    }
-
-    // PrintScreen - try multiple detection methods
-    const isPrint = e.key === 'PrintScreen' || e.code === 'PrintScreen' || 
-                    e.key === 'Print' || e.keyCode === 44;
-    
-    if (isPrint) {
-      e.preventDefault();
-      takePhoto();
-    }
-  });
-
-  document.addEventListener('keyup', (e) => {
-    if (e.key === 'z' || e.key === 'Z') {
-      state.zoomed = false;
-      viewfinder.classList.remove('zoomed');
-      zoomText.textContent = 'ZOOM 1x';
-    }
-    // PrintScreen often only fires on keyup in some browsers
-    const isPrint = e.key === 'PrintScreen' || e.code === 'PrintScreen' || 
-                    e.key === 'Print' || e.keyCode === 44;
-    if (isPrint && state.running) {
-      e.preventDefault();
-      takePhoto();
-    }
-  });
-
-  // Photo taking
-  let photoCooldown = false;
-  function takePhoto() {
-    if (photoCooldown) return;
-    photoCooldown = true;
-    setTimeout(() => photoCooldown = false, 250);
-
-    // Shutter sound
-    playShutter();
-
-    // Flash effect
-    flash.classList.remove('active');
-    void flash.offsetWidth;
-    flash.classList.add('active');
-
-    // Key press animation
-    printKey.classList.remove('key-press');
-    void printKey.offsetWidth;
-    printKey.classList.add('key-press');
-
-    // Photo capture rect
-    const vfRect = viewfinder.getBoundingClientRect();
-    const photoRect = document.createElement('div');
-    photoRect.className = 'photo-capture';
-    photoRect.style.left = vfRect.left + 'px';
-    photoRect.style.top = vfRect.top + 'px';
-    photoRect.style.width = vfRect.width + 'px';
-    photoRect.style.height = vfRect.height + 'px';
-    gameArea.appendChild(photoRect);
-    setTimeout(() => photoRect.remove(), 800);
-
-    // Check captures
-    const centerX = state.mouseX;
-    const centerY = state.mouseY;
-    const radius = state.zoomed ? 80 : 130;
-    
-    let caught = 0;
-    let gainedPoints = 0;
-    let caughtAnimals = [];
-    
-    state.animals.forEach(animal => {
-      if (animal.captured) return;
-      const animalRect = animal.el.getBoundingClientRect();
-      const ax = animalRect.left + animalRect.width / 2;
-      const ay = animalRect.top + animalRect.height / 2;
-      const dist = Math.hypot(ax - centerX, ay - centerY);
-      
-      if (dist < radius) {
-        animal.captured = true;
-        const pts = animal.golden ? 10 : 5;
-        gainedPoints += pts;
-        caught++;
-        if (animal.golden) state.golden++;
-        caughtAnimals.push({ animal, ax, ay, pts });
-        
-        animal.el.classList.add('captured');
-        setTimeout(() => {
-          animal.el.remove();
-          state.animals = state.animals.filter(a => a !== animal);
-        }, 600);
-      }
-    });
-
-    if (caught > 0) {
-      // ── COMBO SYSTEM ──────────────────────────────────────────
-      const multiplier = caught; // 1 animal = x1, 2 = x2, etc.
-      const finalPoints = gainedPoints * multiplier;
-
-      caughtAnimals.forEach(({ ax, ay, pts, animal }) => {
-        playCaptureBlip(animal.golden);
-        showScorePopup(ax, ay, '+' + pts, animal.golden);
-      });
-
-      if (multiplier >= 2) {
-        // Combo bonus
-        playCombo(multiplier);
-        const comboLabels = ['', '', 'DUPLO!', 'TRIPLO!', 'QUADRUPLO!', 'ABSURDO!'];
-        const label = comboLabels[Math.min(multiplier, comboLabels.length - 1)] || multiplier + 'x COMBO!';
-        showComboPopup(centerX, centerY, label, multiplier, finalPoints - gainedPoints);
-        updateComboBadge(multiplier);
-      } else {
-        hideComboBadge();
-      }
-
-      state.score += finalPoints;
-      state.photos += caught;
-      updateHUD();
-      // ──────────────────────────────────────────────────────────
-    } else {
-      // Miss feedback
-      playMiss();
-      showScorePopup(centerX, centerY, 'Vazio!', false, true);
-      gameArea.classList.add('shake');
-      setTimeout(() => gameArea.classList.remove('shake'), 200);
-      hideComboBadge();
-    }
-  }
-
-  function showComboPopup(x, y, label, multiplier, bonusPoints) {
-    const p = document.createElement('div');
-    p.className = 'combo-popup';
-    p.style.left = x + 'px';
-    p.style.top = y + 'px';
-    const colors = ['', '', '#ff9500', '#ff3b30', '#af52de', '#ff2d55'];
-    p.style.color = colors[Math.min(multiplier, colors.length - 1)] || '#ff2d55';
-    p.innerHTML = label + (bonusPoints > 0 ? `<br><span style="font-size:22px;color:#ffd700;">+${bonusPoints} bônus!</span>` : '');
-    gameArea.appendChild(p);
-    setTimeout(() => p.remove(), 1200);
-  }
-
-  function updateComboBadge(multiplier) {
-    comboBadge.classList.remove('hidden');
-    comboCount.textContent = 'x' + multiplier;
-    comboBadge.classList.remove('active');
-    void comboBadge.offsetWidth;
-    comboBadge.classList.add('active');
-    const colors = ['', '', 'text-orange-400', 'text-red-400', 'text-purple-400', 'text-pink-400'];
-    comboCount.className = 'font-display text-3xl ' + (colors[Math.min(multiplier, colors.length-1)] || 'text-pink-400');
-  }
-
-  function hideComboBadge() {
-    comboBadge.classList.add('hidden');
-  }
-
-  function showScorePopup(x, y, text, golden, miss) {
-    const p = document.createElement('div');
-    p.className = 'score-popup' + (miss ? ' miss-popup' : '');
-    p.textContent = text;
-    p.style.left = x + 'px';
-    p.style.top = y + 'px';
-    p.style.transform = 'translate(-50%, -50%)';
-    if (golden) p.style.color = '#ffd700';
-    else if (!miss) p.style.color = '#7fff7f';
-    gameArea.appendChild(p);
-    setTimeout(() => p.remove(), 1000);
-  }
-
-  function updateHUD() {
-    scoreEl.textContent = state.score;
-    photosEl.textContent = state.photos;
-  }
-
-  // Animal spawning
-  function spawnAnimal() {
-    const rect = gameArea.getBoundingClientRect();
-    const golden = Math.random() < 0.25;
-    const fromLeft = Math.random() < 0.5;
-    const emoji = golden ? (Math.random() < 0.5 ? '🦌' : '🐿️') : ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
-    
-    const el = document.createElement('div');
-    el.className = 'animal' + (golden ? ' golden' : '');
-    el.textContent = emoji;
-    
-    // Y position: varied heights
-    const y = rect.height * 0.35 + Math.random() * rect.height * 0.45;
-    const startX = fromLeft ? -80 : rect.width + 80;
-    
-    el.style.left = startX + 'px';
-    el.style.top = y + 'px';
-    
-    if (!fromLeft) el.style.transform = 'scaleX(-1)';
-    
-    gameArea.appendChild(el);
-    
-    const baseSpeed = golden ? 380 : 200;
-    const speed = baseSpeed + Math.random() * 80;
-    
-    const animal = {
-      id: ++state.animalId,
-      el,
-      x: startX,
-      y,
-      vx: fromLeft ? speed : -speed,
-      golden,
-      captured: false,
-      bobPhase: Math.random() * Math.PI * 2
-    };
-    state.animals.push(animal);
-  }
-
-  // Game loop
-  let lastTime = 0;
-  function gameLoop(ts) {
-    if (!state.running) return;
-    if (!lastTime) lastTime = ts;
-    const dt = Math.min((ts - lastTime) / 1000, 0.05);
-    lastTime = ts;
-
-    // Spawn
-    state.lastSpawn += dt * 1000;
-    if (state.lastSpawn >= state.spawnInterval) {
-      state.lastSpawn = 0;
-      spawnAnimal();
-      // Gradually speed up spawning
-      state.spawnInterval = Math.max(700, state.spawnInterval - 15);
-    }
-
-    // Update animals
-    const rect = gameArea.getBoundingClientRect();
-    state.animals.forEach(a => {
-      if (a.captured) return;
-      a.x += a.vx * dt;
-      a.bobPhase += dt * 4;
-      const bob = Math.sin(a.bobPhase) * 8;
-      a.el.style.left = a.x + 'px';
-      a.el.style.top = (a.y + bob) + 'px';
-    });
-
-    // Remove off-screen
-    state.animals = state.animals.filter(a => {
-      if (a.captured) return true;
-      if (a.x < -150 || a.x > rect.width + 150) {
-        a.el.remove();
-        return false;
-      }
-      return true;
-    });
-
-    animationFrame = requestAnimationFrame(gameLoop);
-  }
-
-  // Timer
-  function startTimer() {
-    timerInterval = setInterval(() => {
-      state.time--;
-      timeText.textContent = state.time;
-      const pct = (state.time / GAME_DURATION) * 100;
-      timeBar.style.width = pct + '%';
-      
-      if (state.time <= 10) {
-        timeBar.classList.remove('from-green-400','to-yellow-400');
-        timeBar.classList.add('from-orange-500','to-red-500');
-        playCountdownBeep(state.time <= 5);
-      }
-      
-      if (state.time <= 0) {
-        endGame();
-      }
-    }, 1000);
-  }
-
-  function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.photos = 0;
-    state.golden = 0;
-    state.time = GAME_DURATION;
-    state.animals.forEach(a => a.el.remove());
-    state.animals = [];
-    state.lastSpawn = 0;
-    state.spawnInterval = 1400;
-    lastTime = 0;
-
+  if (caught > 0) {
+    const finalPoints = gained * caught;
+    list.forEach(({ a, ax, ay, pts }) => { playCaptureBlip(a.golden); showScorePopup(ax, ay, '+' + pts, a.golden); });
+    if (caught >= 2) {
+      playCombo(caught);
+      const labels = ['', '', 'DUPLO!', 'TRIPLO!', 'QUADRUPLO!', 'ABSURDO!'];
+      showComboPopup(cx, cy, labels[Math.min(caught, 5)] || caught + 'x COMBO!', caught, finalPoints - gained);
+      updateComboBadge(caught);
+    } else hideComboBadge();
+    state.score += finalPoints; state.photos += caught; updateHUD();
+  } else {
+    playMiss(); showScorePopup(cx, cy, 'Vazio!', false, true);
+    gameArea.classList.add('shake'); setTimeout(() => gameArea.classList.remove('shake'), 200);
     hideComboBadge();
-
-    timeBar.style.width = '100%';
-    timeBar.classList.add('from-green-400','to-yellow-400');
-    timeBar.classList.remove('from-orange-500','to-red-500');
-    
-    updateHUD();
-    timeText.textContent = GAME_DURATION + 's';
-    
-    startModal.classList.add('hidden');
-    endModal.classList.add('hidden');
-    hud.classList.remove('hidden');
-    tipBar.classList.remove('hidden');
-    viewfinder.classList.remove('hidden');
-    
-    createScenery();
-    startTimer();
-    animationFrame = requestAnimationFrame(gameLoop);
   }
+}
 
-  function endGame() {
-    state.running = false;
-    clearInterval(timerInterval);
-    if (animationFrame) cancelAnimationFrame(animationFrame);
-    
-    playGameOver();
-    hideComboBadge();
-    
-    // Clear animals
-    state.animals.forEach(a => a.el.remove());
-    state.animals = [];
-    
-    // Update final stats
-    document.getElementById('final-score').textContent = state.score;
-    document.getElementById('final-photos').textContent = state.photos;
-    document.getElementById('final-golden').textContent = state.golden;
-    
-    // Rank
-    let rank = 'Fotógrafo Iniciante 📷';
-    if (state.score >= 30) rank = 'Fotógrafo Amador 🎞️';
-    if (state.score >= 70) rank = 'Fotógrafo Profissional 📸';
-    if (state.score >= 120) rank = 'Fotógrafo Mestre 🏆';
-    if (state.score >= 200) rank = 'Lenda da Fotografia! 👑';
-    document.getElementById('rank-text').textContent = rank;
-    
-    hud.classList.add('hidden');
-    tipBar.classList.add('hidden');
-    viewfinder.classList.add('hidden');
-    endModal.classList.remove('hidden');
-  }
+function showComboPopup(x, y, label, m, bonus) {
+  const p = document.createElement('div'); p.className = 'combo-popup';
+  p.style.left = x + 'px'; p.style.top = y + 'px';
+  p.style.color = ['', '', '#ff9500', '#ff3b30', '#af52de', '#ff2d55'][Math.min(m, 5)] || '#ff2d55';
+  p.innerHTML = label + (bonus > 0 ? `<br><span style="font-size:22px;color:#ffd700;">+${bonus} bônus!</span>` : '');
+  gameArea.appendChild(p); setTimeout(() => p.remove(), 1200);
+}
+function updateComboBadge(m) {
+  comboBadge.classList.remove('hidden'); comboCount.textContent = 'x' + m;
+  comboBadge.classList.remove('active'); void comboBadge.offsetWidth; comboBadge.classList.add('active');
+  comboCount.style.color = ['', '', '#ff9f43', '#ff6b6b', '#c77dff', '#ff7eb6'][Math.min(m, 5)];
+}
+function hideComboBadge() { comboBadge.classList.add('hidden'); }
+function showScorePopup(x, y, text, golden, miss) {
+  const p = document.createElement('div'); p.className = 'score-popup' + (miss ? ' miss-popup' : '');
+  p.textContent = text; p.style.left = x + 'px'; p.style.top = y + 'px';
+  if (golden) p.style.color = '#ffd700'; else if (!miss) p.style.color = '#7fff7f';
+  gameArea.appendChild(p); setTimeout(() => p.remove(), 1000);
+}
+function updateHUD() { $('score').textContent = state.score; $('photos').textContent = state.photos; }
 
-  startBtn.addEventListener('click', startGame);
-  restartBtn.addEventListener('click', startGame);
+function spawnAnimal() {
+  const rect = gameArea.getBoundingClientRect(), golden = Math.random() < 0.25, fromLeft = Math.random() < 0.5;
+  const emoji = golden ? (Math.random() < 0.5 ? '🦌' : '🐿️') : ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+  const el = document.createElement('div'); el.className = 'animal' + (golden ? ' golden' : ''); el.textContent = emoji;
+  const y = rect.height * 0.35 + Math.random() * rect.height * 0.45, startX = fromLeft ? -80 : rect.width + 80;
+  el.style.left = startX + 'px'; el.style.top = y + 'px';
+  if (!fromLeft) el.style.transform = 'scaleX(-1)';
+  gameArea.appendChild(el);
+  const speed = (golden ? 380 : 200) + Math.random() * 80;
+  state.animals.push({ id: ++state.animalId, el, x: startX, y, vx: fromLeft ? speed : -speed, golden, captured: false, bobPhase: Math.random() * 6.28 });
+}
 
-  // Resize handling
-  window.addEventListener('resize', () => {
-    if (state.running) createScenery();
+function gameLoop(ts) {
+  if (!state.running) return;
+  if (!lastTime) lastTime = ts;
+  const dt = Math.min((ts - lastTime) / 1000, 0.05); lastTime = ts;
+  state.lastSpawn += dt * 1000;
+  if (state.lastSpawn >= state.spawnInterval) { state.lastSpawn = 0; spawnAnimal(); state.spawnInterval = Math.max(700, state.spawnInterval - 15); }
+  const rect = gameArea.getBoundingClientRect();
+  state.animals.forEach(a => {
+    if (a.captured) return;
+    a.x += a.vx * dt; a.bobPhase += dt * 4;
+    a.el.style.left = a.x + 'px'; a.el.style.top = (a.y + Math.sin(a.bobPhase) * 8) + 'px';
   });
+  state.animals = state.animals.filter(a => {
+    if (a.captured) return true;
+    if (a.x < -150 || a.x > rect.width + 150) { a.el.remove(); return false; }
+    return true;
+  });
+  animationFrame = requestAnimationFrame(gameLoop);
+}
 
-  // Element SDK init
-  function updateTexts(config) {
-    document.getElementById('title').textContent = config.game_title || defaultConfig.game_title;
-    document.getElementById('subtitle').textContent = config.game_subtitle || defaultConfig.game_subtitle;
-    document.getElementById('instructions').innerHTML = 
-      (config.instruction_text || defaultConfig.instruction_text)
-        .replace('PrintScr', '<kbd class="bg-gray-100 px-2 py-0.5 rounded border font-mono">PrintScr</kbd>')
-        .replace('1 minuto', '<b>1 minuto</b>');
-    document.getElementById('start-btn-text').textContent = config.start_button_text || defaultConfig.start_button_text;
-  }
+function startTimer() {
+  timerInterval = setInterval(() => {
+    state.time--;
+    $('time-text').textContent = state.time + 's';
+    $('time-bar').style.width = (state.time / GAME_DURATION * 100) + '%';
+    if (state.time <= 10) { $('time-bar').classList.add('low'); playCountdownBeep(state.time <= 5); }
+    if (state.time <= 0) endGame();
+  }, 1000);
+}
 
-  if (window.elementSdk) {
-    window.elementSdk.init({
-      defaultConfig,
-      onConfigChange: async (config) => {
-        updateTexts(config);
-      },
-      mapToCapabilities: () => ({
-        recolorables: [],
-        borderables: [],
-        fontEditable: undefined,
-        fontSizeable: undefined
-      }),
-      mapToEditPanelValues: (config) => new Map([
-        ['game_title', config.game_title || defaultConfig.game_title],
-        ['game_subtitle', config.game_subtitle || defaultConfig.game_subtitle],
-        ['instruction_text', config.instruction_text || defaultConfig.instruction_text],
-        ['start_button_text', config.start_button_text || defaultConfig.start_button_text]
-      ])
-    });
-  }
+function startGame() {
+  stopGame();
+  Object.assign(state, { running: true, score: 0, photos: 0, golden: 0, time: GAME_DURATION, lastSpawn: 0, spawnInterval: 1400 });
+  lastTime = 0;
+  $('time-bar').style.width = '100%'; $('time-bar').classList.remove('low');
+  $('time-text').textContent = GAME_DURATION + 's';
+  updateHUD(); applyScenario();
+  screens.forEach(s => $(s).classList.add('hidden'));
+  hud.classList.remove('hidden'); tipBar.classList.remove('hidden'); viewfinder.classList.remove('hidden');
+  viewfinder.style.left = state.mouseX + 'px'; viewfinder.style.top = state.mouseY + 'px';
+  startTimer();
+  animationFrame = requestAnimationFrame(gameLoop);
+}
 
-  updateTexts(defaultConfig);
-  lucide.createIcons();
-  
-  // Initial scenery preview
-  requestAnimationFrame(() => createScenery());
+function endGame() {
+  const { score, photos, golden } = state;
+  stopGame(); playGameOver();
+  $('final-score').textContent = score; $('final-photos').textContent = photos; $('final-golden').textContent = golden;
+  let rank = 'Fotógrafo Iniciante 📷';
+  if (score >= 30) rank = 'Fotógrafo Amador 🎞️';
+  if (score >= 70) rank = 'Fotógrafo Profissional 📸';
+  if (score >= 120) rank = 'Fotógrafo Mestre 🏆';
+  if (score >= 200) rank = 'Lenda da Fotografia! 👑';
+  $('rank-text').textContent = rank;
+  show('end-modal');
+}
+
+$('start-btn').addEventListener('click', startGame);
+$('scene-play').addEventListener('click', startGame);
+$('restart-btn').addEventListener('click', startGame);
+window.addEventListener('resize', () => { if (!state.running) createScenery(); });
+
+syncOptions(); buildSceneGrid(); applyScenario(); show('menu');
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f529c6365fca4f5',t:'MTc3NzY3ODYxMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
